@@ -1,0 +1,6 @@
+/target
+
+**/.claude/settings.local.json
+
+levenberg-marquardt/
+lmfit-py/
