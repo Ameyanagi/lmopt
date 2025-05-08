@@ -1,0 +1,49 @@
+[package]
+name = "lmopt"
+version = "0.1.0"
+edition = "2021"
+authors = ["LMOpt Contributors"]
+description = "Levenberg-Marquardt optimization with the faer linear algebra library"
+license = "MIT"
+repository = "https://github.com/yourusername/lmopt"
+readme = "README.md"
+keywords = ["optimization", "levenberg-marquardt", "numeric", "fitting", "least-squares"]
+categories = ["algorithms", "mathematics", "science"]
+
+[dependencies]
+# Linear algebra
+faer = { version = "0.22.6", features = ["std", "rayon", "serde", "npy", "perf-warn"] }
+# Make sure all faer dependencies are compatible with 0.22.x
+faer-entity = "0.20.1"
+faer-traits = "0.22.1"
+# Remove specific components and use through the main faer crate instead
+faer-ext = { version = "0.6.0", features = ["nalgebra", "ndarray"] }
+
+# Interoperability
+ndarray = "0.16.1"
+nalgebra = "0.33.2"
+num-traits = "0.2.18"
+
+# Error handling
+thiserror = "2.0.12"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+anyhow = "1.0.98"
+
+# Testing
+approx = "0.5.1"
+
+# Autodiff dependencies - only used with the autodiff feature
+enzyme = { version = "0.4.0", optional = true }
+
+[features]
+default = []
+# Enable nightly feature for faer when autodiff is enabled
+autodiff = ["dep:enzyme", "nightly"]
+nightly = ["faer/nightly"]
+minpack-compat = []
+
+[lib]
+name = "lmopt"
+path = "src/lib.rs"

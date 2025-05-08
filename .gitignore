@@ -1,6 +1,28 @@
-/target
+/target/
+Cargo.lock
 
-**/.claude/settings.local.json
-
+# Reference implementations - not part of our project
 levenberg-marquardt/
 lmfit-py/
+
+# IDE and editor files
+/.idea/
+/.vscode/
+*.iml
+.DS_Store
+
+# Temporary files
+*.swp
+*.swo
+*~
+.#*
+\#*#
+
+# Claude related files
+**/.claude/settings.local.json
+
+# Test artifacts
+*.profraw
+
+# Other tools
+.pre-commit-config.yaml

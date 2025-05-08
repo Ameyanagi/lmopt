@@ -9,6 +9,8 @@ The primary goal of this project is:
 1. Phase 1: Implement the equivalent functionality of the [levenberg-marquardt](https://docs.rs/levenberg-marquardt/latest/levenberg_marquardt/) crate while using the [faer](https://docs.rs/faer/latest/faer/) linear algebra library internally
 2. Phase 2: Add uncertainty calculations and parameter management similar to [lmfit-py](https://lmfit.github.io/lmfit-py/)
 
+For detailed information about the faer library, please refer to the [FAER.md](./FAER.md) file in this repository.
+
 ## Compiler Requirements
 
 This project requires the Rust nightly compiler due to:
@@ -81,14 +83,17 @@ Our tiered approach for jacobian calculation:
 
 - **Compatible Interface**: Implement an interface compatible with the levenberg-marquardt crate
 - **Pure Rust**: Keep the implementation in pure Rust
-- **Matrix Calculations**: Use faer for matrix operations internally
+- **Matrix Calculations**: Use faer for ALL matrix and numerical operations internally
+  - IMPORTANT: Always leverage faer's built-in functions for numerical calculations
+  - NEVER implement numerical algorithms yourself when faer provides the functionality
+  - faer is highly optimized with SIMD and parallel processing capabilities
 - **Matrix Interoperability**: Support both ndarray and faer matrices with efficient conversion
 - **Strict TDD**: Always write failing tests first, then implement code to make them pass
   - Every new feature must have corresponding tests
   - All tests must pass before considering a feature complete
   - Target 90%+ test coverage for core functionality
   - Implement both unit tests and integration tests
-- **Error Handling**: Use thiserror for library errors
+- **Error Handling**: Use thiserror for defining library error types and anyhow for error context and propagation
 
 ## Implementation Plans
 
@@ -365,14 +370,18 @@ pub struct FitStatistics<T> {
 
 ## Matrix Operations with faer
 
-The implementation will use faer internally for all matrix operations, while maintaining similar methods with the levenberg-marquardt crate.
+The implementation MUST use faer internally for ALL matrix and numerical operations, while maintaining similar methods with the levenberg-marquardt crate. For comprehensive details on faer's capabilities, API, and usage patterns, refer to the [FAER.md](./FAER.md) file.
+
+**CRITICAL PRIORITY**: Leverage faer's existing implementations rather than creating custom numerical code. faer is highly optimized with SIMD, parallelization, and cache-efficient algorithms that will outperform custom implementations.
 
 Key faer operations to use:
 
-- Matrix decompositions (QR, Cholesky, etc.)
-- Matrix multiplication and inverse
-- Vector and matrix norms
-- Linear system solving
+- Matrix decompositions (QR, Cholesky, LU, SVD, etc.)
+- Matrix multiplication and inverse operations
+- Vector and matrix norms and distance calculations
+- Linear system solvers and least squares methods
+- Matrix factorization and transformation utilities
+- Memory-optimized computational routines
 
 ## Technical Specifications
 
@@ -400,10 +409,20 @@ Key faer operations to use:
 
 ### Performance Optimization
 
-- Use faer's SIMD acceleration and parallelism features
-- Leverage memory optimization strategies for large problems
-- Choose optimal decomposition methods based on problem characteristics
-- Use automatic differentiation when possible for better accuracy
+- **Maximize faer usage**: Always use faer's built-in functions rather than implementing custom algorithms
+  - Leverage faer's SIMD acceleration and parallelism features
+  - Use faer's matrix decompositions and solvers directly
+  - Prefer high-level faer APIs when available
+- **Avoid reimplementation**: Never reimplement numerical algorithms that faer already provides
+  - This includes matrix operations, decompositions, solvers, and numerical utilities
+  - Custom implementations are almost always less efficient than faer's optimized code
+- **Memory management**: Use faer's memory optimization strategies for large problems
+  - Utilize faer's `MemStack` for temporary allocations
+  - Reuse memory where possible for multiple operations
+- **Algorithm selection**: Choose optimal decomposition methods based on problem characteristics
+  - Follow faer's recommendations for specific problem types
+- **Autodiff integration**: Use automatic differentiation when possible for better accuracy
+  - Combine faer with Rust's autodiff capabilities
 
 ## Directory Structure
 
@@ -411,7 +430,7 @@ Key faer operations to use:
 
 - **src/**
   - **lib.rs** - Main library entry point and module declarations
-  - **error.rs** - Library error definitions using thiserror
+  - **error.rs** - Library error definitions using thiserror and anyhow
   - **problem.rs** - Problem definition trait and implementations
   - **lm/** - Main Levenberg-Marquardt algorithm implementation
     - **algorithm.rs** - Core algorithm steps
@@ -505,12 +524,20 @@ Key faer operations to use:
   - Place internal utility functions in a dedicated `utils.rs` file
   - Define all error types in a dedicated `error.rs` file
 - **Documentation**: All public APIs must have rustdoc comments with mathematical explanation
-- **Error Types**: Define specific error types with thiserror
+- **Error Types**: Define specific error types with thiserror and use anyhow for error context and propagation
 - **Performance**: Optimize numerically intensive operations, use faer efficiently
 - **Testing**:
   - Unit test mathematical correctness against reference values from the levenberg-marquardt crate
   - Place small unit tests in each source file under `#[cfg(test)]` modules
   - Place larger integration tests in the `tests/` directory organized by module
+
+## Project Documentation
+
+The project includes the following key documentation files:
+
+1. **CLAUDE.md** (this file): Provides overall guidance for the project, including implementation details, coding standards, and architectural decisions.
+2. **FAER.md**: Contains detailed information about the faer linear algebra library, including usage examples, best practices, and integration patterns that should be followed when implementing this project.
+3. **README.md**: General project overview and usage instructions for users of the library.
 
 ## Licensing
 
