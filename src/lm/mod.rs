@@ -15,13 +15,15 @@ use std::ops::AddAssign;
 ///
 /// # Methods
 ///
+/// - `Auto`: Use an analytical Jacobian when the problem supplies one,
+///   otherwise use central finite differences. This is the default.
+///
 /// - `UserProvided`: Use the analytical Jacobian provided by the user through
 ///   the `jacobian()` method in the `LeastSquaresProblem` trait. This is
 ///   usually the fastest and most accurate approach.
 ///
-/// - `AutoDiff`: Use automatic differentiation, which requires the nightly
-///   compiler and the `autodiff` feature flag. This provides exact derivatives
-///   without the need for manual calculation.
+/// - `AutoDiff`: Reserve automatic differentiation explicitly. Until the
+///   Enzyme backend is implemented, selecting it returns an error.
 ///
 /// - `NumericalCentral`: Use central difference approximation:
 ///   `(f(x+h) - f(x-h)) / (2*h)`. This is more accurate than forward or
@@ -37,18 +39,19 @@ use std::ops::AddAssign;
 ///
 /// # Choosing a Method
 ///
-/// 1. If you can derive the analytical Jacobian, use `UserProvided`.
-/// 2. If analytical Jacobian is difficult but you have nightly Rust,
-///    consider `AutoDiff`.
+/// 1. Prefer `Auto` unless you need to force a specific strategy.
+/// 2. If you can derive the analytical Jacobian, use `UserProvided`.
 /// 3. For a good balance of accuracy and performance with numerical
 ///    methods, use `NumericalCentral`.
 /// 4. Use `NumericalForward` or `NumericalBackward` only when performance
 ///    is more important than accuracy, or when evaluating at boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JacobianMethod {
+    /// Prefer a user-provided Jacobian and otherwise use central differences.
+    Auto,
     /// Use the user-provided Jacobian function.
     UserProvided,
-    /// Use automatic differentiation (requires nightly and autodiff feature).
+    /// Request automatic differentiation. Currently returns an unavailable error.
     AutoDiff,
     /// Use numerical differentiation with central differences.
     NumericalCentral,
@@ -198,6 +201,21 @@ where
     /// The total time taken for the minimization process.
     /// Useful for benchmarking and optimization.
     pub execution_time: std::time::Duration,
+
+    /// Number of calls to the user residual function.
+    pub residual_evaluations: usize,
+
+    /// Number of calls to the user analytical Jacobian function.
+    pub jacobian_evaluations: usize,
+
+    /// Number of trial steps accepted by the trust-region logic.
+    pub accepted_steps: usize,
+
+    /// Number of trial steps rejected by the trust-region logic.
+    pub rejected_steps: usize,
+
+    /// Final damping parameter.
+    pub final_lambda: T,
 }
 
 /// Configuration for the Levenberg-Marquardt optimization algorithm.
@@ -273,7 +291,7 @@ impl Default for LevenbergMarquardt {
             epsilon_1: 1e-10,
             epsilon_2: 1e-10,
             tau: 1e-3,
-            jacobian_method: JacobianMethod::NumericalCentral, // Changed from AutoDiff to NumericalCentral
+            jacobian_method: JacobianMethod::Auto,
             numerical_diff_step_size: 1e-6,
         }
     }
@@ -297,10 +315,20 @@ impl LevenbergMarquardt {
         self
     }
 
+    /// Set the relative objective-reduction tolerance.
+    pub fn with_ftol(self, ftol: f64) -> Self {
+        self.with_epsilon_1(ftol)
+    }
+
     /// Set the convergence tolerance for relative change in parameters.
     pub fn with_epsilon_2(mut self, epsilon_2: f64) -> Self {
         self.epsilon_2 = epsilon_2;
         self
+    }
+
+    /// Set the relative parameter-step tolerance.
+    pub fn with_xtol(self, xtol: f64) -> Self {
+        self.with_epsilon_2(xtol)
     }
 
     /// Set the initial value for the damping factor.
@@ -315,7 +343,7 @@ impl LevenbergMarquardt {
         self
     }
 
-    /// Set the step size for numerical differentiation.
+    /// Set the relative step size for numerical differentiation.
     pub fn with_numerical_diff_step_size(mut self, step_size: f64) -> Self {
         self.numerical_diff_step_size = step_size;
         self

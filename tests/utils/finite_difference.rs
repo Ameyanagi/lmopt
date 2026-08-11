@@ -43,7 +43,7 @@ impl LeastSquaresProblem<f64> for QuadraticProblem {
 #[test]
 fn test_forward_difference() {
     let problem = QuadraticProblem;
-    let params = Mat::from_fn(2, 1, |i, _| if i.0 == 0 { 2.0 } else { 3.0 });
+    let params = Mat::from_fn(2, 1, |i, _| if i == 0 { 2.0 } else { 3.0 });
 
     let step_size = 1e-6;
     let numerical_jacobian = calculate_jacobian(&problem, &params, step_size, FiniteDifferenceMethod::Forward).unwrap();
@@ -61,7 +61,7 @@ fn test_forward_difference() {
 #[test]
 fn test_central_difference() {
     let problem = QuadraticProblem;
-    let params = Mat::from_fn(2, 1, |i, _| if i.0 == 0 { 2.0 } else { 3.0 });
+    let params = Mat::from_fn(2, 1, |i, _| if i == 0 { 2.0 } else { 3.0 });
 
     let step_size = 1e-6;
     let numerical_jacobian = calculate_jacobian(&problem, &params, step_size, FiniteDifferenceMethod::Central).unwrap();
@@ -79,7 +79,7 @@ fn test_central_difference() {
 #[test]
 fn test_backward_difference() {
     let problem = QuadraticProblem;
-    let params = Mat::from_fn(2, 1, |i, _| if i.0 == 0 { 2.0 } else { 3.0 });
+    let params = Mat::from_fn(2, 1, |i, _| if i == 0 { 2.0 } else { 3.0 });
 
     let step_size = 1e-6;
     let numerical_jacobian = calculate_jacobian(&problem, &params, step_size, FiniteDifferenceMethod::Backward).unwrap();
@@ -92,4 +92,27 @@ fn test_backward_difference() {
             assert!(rel_error < 1e-5, "Backward difference rel error too large at ({}, {}): {}", i, j, rel_error);
         }
     }
+}
+
+struct ChangingResidualShape;
+
+impl LeastSquaresProblem<f64> for ChangingResidualShape {
+    fn residuals(&self, parameters: &Mat<f64>) -> Result<Mat<f64>> {
+        let rows = if parameters[(0, 0)] > 0.0 { 2 } else { 1 };
+        Ok(Mat::zeros(rows, 1))
+    }
+}
+
+#[test]
+fn changing_residual_shape_returns_an_error() {
+    let error = calculate_jacobian(&ChangingResidualShape, &Mat::zeros(1, 1), 1e-6, FiniteDifferenceMethod::Forward).unwrap_err();
+
+    assert!(error.to_string().contains("dimensions changed"));
+}
+
+#[test]
+fn invalid_step_size_returns_an_error() {
+    let error = calculate_jacobian(&QuadraticProblem, &Mat::ones(2, 1), 0.0, FiniteDifferenceMethod::Central).unwrap_err();
+
+    assert!(error.to_string().contains("step size"));
 }

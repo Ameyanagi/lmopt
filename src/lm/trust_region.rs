@@ -1,5 +1,5 @@
-use crate::Result;
-use faer::mat::Mat;
+use crate::{Error, Result};
+use faer::{linalg::solvers::Solve, mat::Mat, Side};
 use faer_traits::RealField;
 use num_traits::{Float, FromPrimitive};
 use std::ops::{AddAssign, Mul};
@@ -10,136 +10,69 @@ pub(crate) struct LMParameterUpdate<T>
 where
     T: RealField + Copy + Float + FromPrimitive + AddAssign,
 {
-    pub lambda: T,
     pub step: Mat<T>,
     pub step_norm: T,
     pub predicted_reduction: T,
 }
 
+/// Quantities that remain unchanged while only the damping parameter changes.
+pub(crate) struct NormalEquations<T>
+where
+    T: RealField + Copy,
+{
+    jtj: Mat<T>,
+    jtr: Mat<T>,
+}
+
+impl<T> NormalEquations<T>
+where
+    T: RealField + Copy + Mul<Output = T>,
+{
+    pub(crate) fn new(jacobian: &Mat<T>, residuals: &Mat<T>) -> Self {
+        Self {
+            jtj: jacobian.transpose().mul(jacobian),
+            jtr: jacobian.transpose().mul(residuals),
+        }
+    }
+}
+
 /// Calculate the parameter update for a given lambda using the trust region approach
-pub(crate) fn calculate_parameter_update<T>(jacobian: &Mat<T>, residuals: &Mat<T>, lambda: T, diag: &Mat<T>) -> Result<LMParameterUpdate<T>>
+pub(crate) fn calculate_parameter_update<T>(normal: &NormalEquations<T>, lambda: T, diag: &Mat<T>) -> Result<LMParameterUpdate<T>>
 where
     T: RealField + Copy + Float + FromPrimitive + AddAssign,
 {
-    let n = jacobian.ncols();
-
-    // Compute J^T * J and J^T * r
-    let jtj = jacobian.transpose().mul(jacobian);
-    let jtr = jacobian.transpose().mul(residuals);
+    let n = normal.jtj.ncols();
 
     // Create the augmented matrix (J^T * J + lambda * diag^2)
-    let mut augmented = jtj.clone();
+    let mut augmented = normal.jtj.clone();
     for i in 0..n {
         augmented[(i, i)] += lambda * diag[(i, 0)] * diag[(i, 0)];
     }
 
-    // Solve the linear system (J^T * J + lambda * diag^2) * step = J^T * r
-    let mut step = Mat::zeros(n, 1);
-
-    // Use direct matrix inversion as a fallback approach
-    // Implement a simple solution using matrix inversion
-    // In a real implementation, we would use more efficient solvers
-
-    // Create an identity matrix for inversion if needed
-    let _identity = Mat::<T>::identity(n, n);
-
-    // Manually solve the linear system (J^T * J + lambda * diag^2) * x = -J^T * r
-    // using a simplistic approach
-
-    // First, apply Gaussian elimination to solve the system
-    // For simplicity, just copy the right-hand side
-    let mut b = jtr.clone();
-
-    // Make all entries of b negative (for -J^T * r)
+    // Solve the symmetric positive-definite damped normal system with faer's
+    // Cholesky implementation. Unlike the previous handwritten elimination,
+    // this reports a factorization failure instead of dividing by a zero pivot.
+    let mut b = normal.jtr.clone();
     for i in 0..b.nrows() {
         b[(i, 0)] = -b[(i, 0)];
     }
+    let factor = augmented
+        .llt(Side::Lower)
+        .map_err(|error| Error::MatrixError(format!("damped normal matrix is not positive definite: {error:?}")))?;
+    let step = factor.solve(&b);
 
-    // Create a copy of augmented for in-place operations
-    let mut a = augmented.clone();
+    let step_norm = step.norm_l2();
 
-    // Simple Gaussian elimination
-    for i in 0..n {
-        // Find pivot
-        let mut max_val = a[(i, i)].abs();
-        let mut max_row = i;
-        for j in i + 1..n {
-            let val_abs = a[(j, i)].abs();
-            if val_abs > max_val {
-                max_val = val_abs;
-                max_row = j;
-            }
-        }
-
-        // Swap rows if needed
-        if max_row != i {
-            for j in i..n {
-                let temp = a[(i, j)];
-                a[(i, j)] = a[(max_row, j)];
-                a[(max_row, j)] = temp;
-            }
-            let temp = b[(i, 0)];
-            b[(i, 0)] = b[(max_row, 0)];
-            b[(max_row, 0)] = temp;
-        }
-
-        // Eliminate below
-        for j in i + 1..n {
-            let factor = a[(j, i)] / a[(i, i)];
-            for k in i..n {
-                a[(j, k)] = a[(j, k)] - factor * a[(i, k)];
-            }
-            b[(j, 0)] = b[(j, 0)] - factor * b[(i, 0)];
-        }
-    }
-
-    // Back substitution
-    for i in (0..n).rev() {
-        let mut sum = T::zero();
-        for j in i + 1..n {
-            sum += a[(i, j)] * step[(j, 0)];
-        }
-        step[(i, 0)] = (b[(i, 0)] - sum) / a[(i, i)];
-    }
-
-    // Calculate step norm and predicted reduction
-    // Compute ||diag * step||
-    let mut diag_step = Mat::zeros(n, 1);
-    for i in 0..n {
-        diag_step[(i, 0)] = diag[(i, 0)] * step[(i, 0)];
-    }
-    // Calculate Euclidean norm manually
-    let mut sum = T::zero();
-    for i in 0..diag_step.nrows() {
-        sum += diag_step[(i, 0)] * diag_step[(i, 0)];
-    }
-    let step_norm = sum.sqrt();
-
-    // Compute predicted reduction:
-    // 0.5 * (||r||^2 - ||r + J*step||^2)
-    // Approximated as: 0.5 * (||r||^2 - ||r + J*step||^2) ≈ -step^T * (J^T*r + 0.5*lambda*diag^2*step)
+    // From (JᵀJ + λD²)s = -Jᵀr, the quadratic-model reduction is
+    // 0.5 * sᵀ(λD²s - Jᵀr).
     let half = T::from_f64(0.5).unwrap();
-    let mut lambda_diag_step = Mat::zeros(n, 1);
-    for i in 0..n {
-        lambda_diag_step[(i, 0)] = lambda * diag[(i, 0)] * diag[(i, 0)] * step[(i, 0)];
-    }
-
-    let mut temp = jtr.clone();
-    for i in 0..n {
-        temp[(i, 0)] += half * lambda_diag_step[(i, 0)];
-    }
-
     let mut predicted_reduction = T::zero();
     for i in 0..n {
-        predicted_reduction += -step[(i, 0)] * temp[(i, 0)];
+        let damped_step = lambda * diag[(i, 0)] * diag[(i, 0)] * step[(i, 0)];
+        predicted_reduction += half * step[(i, 0)] * (damped_step - normal.jtr[(i, 0)]);
     }
 
-    Ok(LMParameterUpdate {
-        lambda,
-        step,
-        step_norm,
-        predicted_reduction,
-    })
+    Ok(LMParameterUpdate { step, step_norm, predicted_reduction })
 }
 
 /// Adjust the damping parameter lambda based on the ratio of actual to predicted reduction
@@ -175,5 +108,47 @@ where
     } else {
         // Keep lambda the same
         lambda
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{adjust_lambda, calculate_parameter_update, NormalEquations};
+    use faer::Mat;
+
+    #[test]
+    fn solves_the_damped_normal_system() {
+        let residuals = Mat::<f64>::from_fn(2, 1, |i, _| if i == 0 { -1.0 } else { -2.0 });
+        let jacobian = Mat::<f64>::identity(2, 2);
+        let diagonal = Mat::<f64>::ones(2, 1);
+        let normal = NormalEquations::new(&jacobian, &residuals);
+
+        let undamped = calculate_parameter_update(&normal, 0.0, &diagonal).unwrap();
+        assert!((undamped.step[(0, 0)] - 1.0).abs() < 1e-12);
+        assert!((undamped.step[(1, 0)] - 2.0).abs() < 1e-12);
+        assert!((undamped.predicted_reduction - 2.5).abs() < 1e-12);
+
+        let damped = calculate_parameter_update(&normal, 1.0, &diagonal).unwrap();
+        assert!((damped.step[(0, 0)] - 0.5).abs() < 1e-12);
+        assert!((damped.step[(1, 0)] - 1.0).abs() < 1e-12);
+        assert!((damped.predicted_reduction - 1.875).abs() < 1e-12);
+    }
+
+    #[test]
+    fn reports_a_singular_undamped_system() {
+        let residuals = Mat::<f64>::ones(1, 1);
+        let jacobian = Mat::<f64>::zeros(1, 1);
+        let diagonal = Mat::<f64>::ones(1, 1);
+        let normal = NormalEquations::new(&jacobian, &residuals);
+
+        assert!(calculate_parameter_update(&normal, 0.0, &diagonal).is_err());
+    }
+
+    #[test]
+    fn adjusts_lambda_from_step_quality() {
+        assert!(adjust_lambda(1.0, 0.0, false) > 1.0);
+        assert!(adjust_lambda(1.0, 0.1, true) > 1.0);
+        assert!(adjust_lambda(1.0, 0.9, true) < 1.0);
+        assert_eq!(adjust_lambda(1.0, 0.5, true), 1.0);
     }
 }

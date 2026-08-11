@@ -1,5 +1,5 @@
 use faer::Mat;
-use lmopt::utils::jacobian::{get_jacobian_calculator, JacobianCalculator};
+use lmopt::utils::jacobian::get_jacobian_calculator;
 use lmopt::{JacobianMethod, LeastSquaresProblem, Result};
 
 // Define a simple problem for testing
@@ -40,7 +40,7 @@ impl LeastSquaresProblem<f64> for LinearProblem {
 #[test]
 fn test_user_provided_jacobian() {
     let problem = LinearProblem;
-    let params = Mat::from_fn(2, 1, |i, _| if i.0 == 0 { 1.0 } else { 1.0 });
+    let params = Mat::from_fn(2, 1, |_, _| 1.0);
 
     let calculator = get_jacobian_calculator::<f64>(JacobianMethod::UserProvided, 0.0);
     let jacobian = calculator.calculate_jacobian(&problem, &params).unwrap();
@@ -64,7 +64,7 @@ fn test_user_provided_jacobian() {
 #[test]
 fn test_numerical_central_jacobian() {
     let problem = LinearProblem;
-    let params = Mat::from_fn(2, 1, |i, _| if i.0 == 0 { 1.0 } else { 1.0 });
+    let params = Mat::from_fn(2, 1, |_, _| 1.0);
 
     // Using central difference method
     let calculator = get_jacobian_calculator::<f64>(JacobianMethod::NumericalCentral, 1e-6);
@@ -89,7 +89,7 @@ fn test_numerical_central_jacobian() {
 #[test]
 fn test_numerical_forward_jacobian() {
     let problem = LinearProblem;
-    let params = Mat::from_fn(2, 1, |i, _| if i.0 == 0 { 1.0 } else { 1.0 });
+    let params = Mat::from_fn(2, 1, |_, _| 1.0);
 
     // Using forward difference method
     let calculator = get_jacobian_calculator::<f64>(JacobianMethod::NumericalForward, 1e-6);
@@ -112,33 +112,26 @@ fn test_numerical_forward_jacobian() {
 }
 
 #[test]
-fn test_fallback_with_autodiff() {
+fn test_autodiff_is_explicitly_unavailable() {
     let problem = LinearProblem;
-    let params = Mat::from_fn(2, 1, |i, _| if i.0 == 0 { 1.0 } else { 1.0 });
+    let params = Mat::from_fn(2, 1, |_, _| 1.0);
 
-    // When AutoDiff is not available or fails, it should fall back to numerical differentiation
+    // Never silently label finite differences as automatic differentiation.
     let calculator = get_jacobian_calculator::<f64>(JacobianMethod::AutoDiff, 1e-6);
+    let error = calculator.calculate_jacobian(&problem, &params).unwrap_err();
 
-    #[cfg(feature = "autodiff")]
-    {
-        // This should emit an error that we're not testing
-        let _result = calculator.calculate_jacobian(&problem, &params);
-        assert_eq!(calculator.method_used(), JacobianMethod::AutoDiff);
-    }
+    assert!(error.to_string().contains("unavailable"));
+    assert_eq!(calculator.method_used(), JacobianMethod::AutoDiff);
+}
 
-    #[cfg(not(feature = "autodiff"))]
-    {
-        let jacobian = calculator.calculate_jacobian(&problem, &params).unwrap();
+#[test]
+fn test_auto_prefers_the_analytical_jacobian() {
+    let problem = LinearProblem;
+    let params = Mat::from_fn(2, 1, |_, _| 1.0);
+    let calculator = get_jacobian_calculator::<f64>(JacobianMethod::Auto, 1e-6);
 
-        // Verify the Jacobian values (calculated using central difference)
-        assert!((jacobian[(0, 0)] - 1.0).abs() < 1e-8);
-        assert!((jacobian[(0, 1)] - 1.0).abs() < 1e-8);
-        assert!((jacobian[(1, 0)] - 2.0).abs() < 1e-8);
-        assert!((jacobian[(1, 1)] - 1.0).abs() < 1e-8);
-        assert!((jacobian[(2, 0)] - 3.0).abs() < 1e-8);
-        assert!((jacobian[(2, 1)] - 1.0).abs() < 1e-8);
+    let jacobian = calculator.calculate_jacobian(&problem, &params).unwrap();
 
-        // When autodiff is not available, it should default to central difference
-        assert_eq!(calculator.method_used(), JacobianMethod::NumericalCentral);
-    }
+    assert_eq!(jacobian[(2, 0)], 3.0);
+    assert_eq!(calculator.method_used(), JacobianMethod::UserProvided);
 }

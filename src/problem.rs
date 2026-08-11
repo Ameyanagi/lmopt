@@ -112,8 +112,9 @@ where
     ///
     /// * `Some(Mat<T>)` - Jacobian matrix of shape m×n, where m is the number
     ///   of residuals and n is the number of parameters
-    /// * `None` - If no analytical Jacobian is provided (the algorithm will use
-    ///   automatic or numerical differentiation instead)
+    /// * `None` - If no analytical Jacobian is provided. With the default
+    ///   [`crate::JacobianMethod::Auto`] strategy, the optimizer falls back to
+    ///   central finite differences.
     ///
     /// # Notes
     ///
@@ -125,24 +126,9 @@ where
         None
     }
 
-    /// Hint whether to use autodiff or numerical differentiation when no Jacobian is provided.
-    ///
-    /// This hint is used when no analytical Jacobian is provided via the `jacobian()`
-    /// method, to choose between automatic differentiation and numerical differentiation.
-    ///
-    /// # Returns
-    ///
-    /// * `true` - Prefer automatic differentiation (when available)
-    /// * `false` - Prefer numerical differentiation
-    ///
-    /// # Notes
-    ///
-    /// - The automatic differentiation feature requires the nightly compiler
-    ///   and the 'autodiff' feature flag
-    /// - If autodiff is not available, the system will fall back to numerical
-    ///   differentiation regardless of this hint
-    /// - Default is `true` (prefer autodiff when available)
-    fn prefer_autodiff(&self) -> bool {
-        true
+    /// Fallible variant of [`Self::jacobian`]. Override this when evaluating
+    /// an analytical Jacobian can fail.
+    fn try_jacobian(&self, parameters: &Mat<T>) -> Result<Option<Mat<T>>> {
+        Ok(self.jacobian(parameters))
     }
 }

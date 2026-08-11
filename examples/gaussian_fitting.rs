@@ -1,4 +1,3 @@
-use anyhow::Context;
 use lmopt::{JacobianMethod, LeastSquaresProblem, LevenbergMarquardt, Result};
 
 // Fitting a Gaussian curve: y = a * exp(-(x - b)² / (2 * c²)) + d
@@ -110,7 +109,7 @@ fn main() -> Result<()> {
         .with_jacobian_method(JacobianMethod::UserProvided);
 
     // Solve the optimization problem
-    let result = optimizer.minimize(&problem, &initial_guess).with_context(|| "Failed to fit Gaussian model")?;
+    let result = optimizer.minimize(&problem, &initial_guess)?;
 
     // Print the results
     println!("Gaussian Fitting Results");
@@ -118,6 +117,8 @@ fn main() -> Result<()> {
     println!("Optimization complete after {} iterations", result.iterations);
     println!("Success: {}", result.success);
     println!("Termination reason: {:?}", result.termination_reason);
+    println!("Accepted/rejected steps: {}/{}", result.accepted_steps, result.rejected_steps);
+    println!("Residual/Jacobian evaluations: {}/{}", result.residual_evaluations, result.jacobian_evaluations);
     println!("Execution time: {:?}", result.execution_time);
 
     // Extract the optimized parameters
@@ -127,7 +128,7 @@ fn main() -> Result<()> {
     let fitted_d = result.solution_params[(3, 0)];
 
     println!("\nFitted Gaussian: f(x) = {:.4} * exp(-((x - {:.4})² / (2 * {:.4}²))) + {:.4}", fitted_a, fitted_b, fitted_c, fitted_d);
-    println!("Final sum of squares: {:.6e}", result.objective_function);
+    println!("Final objective value (0.5 * sum of squares): {:.6e}", result.objective_function);
 
     // Compare with the true values
     println!("\nTrue values: a={:.4}, b={:.4}, c={:.4}, d={:.4}", true_a, true_b, true_c, true_d);

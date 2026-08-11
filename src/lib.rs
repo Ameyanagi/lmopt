@@ -9,11 +9,11 @@
 //! - **Powerful Optimizer**: Robust Levenberg-Marquardt implementation with trust region strategy
 //! - **High Performance**: Built on the `faer` library for fast matrix operations
 //! - **Multiple Jacobian Methods**:
+//!   - Automatic selection between analytical and numerical differentiation
 //!   - User-provided custom analytical Jacobian
-//!   - Automatic differentiation (with the `autodiff` feature and nightly Rust)
 //!   - Numerical differentiation (forward, backward, or central differences)
-//! - **Matrix Interoperability**: Seamless conversion between `faer`, `ndarray`, and `nalgebra` matrices
-//! - **Error Handling**: Comprehensive error types with context using `thiserror` and `anyhow`
+//! - **Matrix Interoperability**: Optional `ndarray` and `nalgebra` conversion features
+//! - **Error Handling**: Structured, matchable errors using `thiserror`
 //!
 //! ## Basic Usage
 //!
@@ -66,16 +66,14 @@
 //!
 //! The library provides several methods for calculating the Jacobian matrix:
 //!
-//! 1. **User-Provided**: The fastest and most accurate method when available
-//! 2. **Automatic Differentiation**: Using Rust's experimental `std::autodiff` feature (nightly only)
-//!    - Exact derivatives without numerical approximation errors
-//!    - Requires the nightly compiler and the `autodiff` feature flag
-//!    - Ideal for complex functions where deriving manual Jacobians is difficult
-//!    - Generally more accurate and often faster than numerical methods
+//! 1. **Auto**: Prefer an analytical Jacobian and otherwise use central differences
+//! 2. **User-Provided**: The fastest and most accurate method when available
 //! 3. **Numerical Differentiation**:
-//!    - Forward differences: `f(x+h) - f(x) / h`
-//!    - Central differences: `f(x+h) - f(x-h) / (2*h)` (more accurate)
+//!    - Forward differences: `(f(x+h) - f(x)) / h`
+//!    - Central differences: `(f(x+h) - f(x-h)) / (2*h)` (more accurate)
 //!    - Backward differences: `f(x) - f(x-h) / h`
+//! 4. **Automatic Differentiation**: Reserved for a future Enzyme backend;
+//!    requesting it currently returns [`Error::AutoDiffUnavailable`].
 //!
 //! ## Performance Considerations
 //!
@@ -94,9 +92,6 @@
 //! - Execution time statistics
 //! - Final residuals and objective function value
 //! - The method used for Jacobian calculation
-
-// Enable experimental autodiff feature only when the autodiff feature is enabled
-#![cfg_attr(feature = "autodiff", feature(autodiff))]
 
 mod error;
 mod lm;

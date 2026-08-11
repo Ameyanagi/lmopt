@@ -1,4 +1,3 @@
-use anyhow::Context;
 use lmopt::{JacobianMethod, LeastSquaresProblem, LevenbergMarquardt, Result};
 
 // A simple problem fitting a line: y = a*x + b
@@ -54,7 +53,7 @@ fn main() -> Result<()> {
     let problem = LinearModel { x_data, y_data };
 
     // Initial guess
-    let initial_guess = faer::Mat::from_fn(2, 1, |i, _| if i == 0 { 1.0 } else { 1.0 }); // a=1, b=1
+    let initial_guess = faer::Mat::ones(2, 1); // a=1, b=1
 
     // Create optimizer with fluent API
     let optimizer = LevenbergMarquardt::new()
@@ -64,19 +63,20 @@ fn main() -> Result<()> {
         .with_jacobian_method(JacobianMethod::UserProvided);
 
     // Solve the optimization problem
-    let result = optimizer.minimize(&problem, &initial_guess).with_context(|| "Failed to minimize the linear model")?;
+    let result = optimizer.minimize(&problem, &initial_guess)?;
 
     // Print the results
     println!("Optimization complete after {} iterations", result.iterations);
     println!("Success: {}", result.success);
     println!("Termination reason: {:?}", result.termination_reason);
+    println!("Residual/Jacobian evaluations: {}/{}", result.residual_evaluations, result.jacobian_evaluations);
 
     // Extract the optimized parameters
     let a = result.solution_params[(0, 0)];
     let b = result.solution_params[(1, 0)];
 
     println!("\nFitted line: y = {:.4}*x + {:.4}", a, b);
-    println!("Final sum of squares: {:.6e}", result.objective_function);
+    println!("Final objective value (0.5 * sum of squares): {:.6e}", result.objective_function);
     println!("Execution time: {:?}", result.execution_time);
 
     // Compare with the true values (a=2, b=3)

@@ -33,11 +33,6 @@ impl LeastSquaresProblem<f64> for RosenbrockProblem {
 
         Some(jacobian)
     }
-
-    fn prefer_autodiff(&self) -> bool {
-        // Prefer autodiff for this problem
-        true
-    }
 }
 
 #[test]

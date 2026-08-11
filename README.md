@@ -10,12 +10,12 @@ A high-performance Rust implementation of the Levenberg-Marquardt algorithm for 
 - **Powerful Optimizer**: Robust implementation of the Levenberg-Marquardt algorithm with trust region strategy
 - **High Performance**: Built on the highly optimized `faer` library for efficient matrix operations
 - **Multiple Jacobian Methods**:
+  - Automatic selection of the best available implemented method
   - User-provided analytical Jacobian
-  - Automatic differentiation (using Rust's experimental autodiff feature)
   - Numerical differentiation (central, forward, or backward differences)
-- **Matrix Interoperability**: Seamless conversion between `faer`, `ndarray`, and `nalgebra` matrices
+- **Matrix Interoperability**: Optional conversion support for `ndarray` and `nalgebra`
 - **Comprehensive API**: Fluent interface for configurability and ease of use
-- **Error Handling**: Extensive error types with context using `thiserror` and `anyhow`
+- **Error Handling**: A structured, matchable error type built with `thiserror`
 
 ## Quick Start
 
@@ -77,8 +77,8 @@ fn main() -> Result<()> {
     // Create optimizer with custom settings
     let optimizer = LevenbergMarquardt::new()
         .with_max_iterations(100)
-        .with_epsilon_1(1e-8)
-        .with_epsilon_2(1e-8)
+        .with_ftol(1e-8)
+        .with_xtol(1e-8)
         .with_jacobian_method(JacobianMethod::UserProvided);
     
     // Solve the optimization problem
@@ -106,24 +106,21 @@ lmopt = "0.1.0"
 faer = "0.22.6"  # Required dependency
 ```
 
-If you want to use the autodiff feature (requires nightly Rust):
+Enable only the interoperability you need:
 
 ```toml
 [dependencies]
-lmopt = { version = "0.1.0", features = ["autodiff"] }
-faer = { version = "0.22.6", features = ["nightly"] }
+lmopt = { version = "0.1.0", features = ["ndarray", "nalgebra"] }
 ```
 
 ## Requirements
 
-- Rust (nightly recommended for autodiff feature)
+- Stable Rust
 - Dependencies:
   - faer = "0.22.6"
-  - faer-ext = "0.6.0"
-  - ndarray = "0.16.1" (for interoperability)
-  - nalgebra = "0.33.2" (for interoperability)
+  - ndarray = "0.16.1" (optional interoperability feature)
+  - nalgebra = "0.33.2" (optional interoperability feature)
   - thiserror = "2.0.12"
-  - anyhow = "1.0.98"
 
 ## Documentation
 
@@ -148,10 +145,6 @@ impl LeastSquaresProblem<f64> for MyProblem {
         // Return None to use automatic or numerical differentiation
     }
     
-    // Optional: Hint whether to use autodiff when no Jacobian is provided
-    fn prefer_autodiff(&self) -> bool {
-        true // Default is true
-    }
 }
 ```
 
@@ -160,13 +153,13 @@ impl LeastSquaresProblem<f64> for MyProblem {
 You can choose from several methods for calculating the Jacobian matrix:
 
 ```rust
+// Automatically use an analytical Jacobian when provided, otherwise central differences
+let optimizer = LevenbergMarquardt::new()
+    .with_jacobian_method(JacobianMethod::Auto);
+
 // Use the user-provided analytical Jacobian (most efficient)
 let optimizer = LevenbergMarquardt::new()
     .with_jacobian_method(JacobianMethod::UserProvided);
-
-// Use automatic differentiation (requires nightly and autodiff feature)
-let optimizer = LevenbergMarquardt::new()
-    .with_jacobian_method(JacobianMethod::AutoDiff);
 
 // Use numerical differentiation with central differences (most accurate numerical method)
 let optimizer = LevenbergMarquardt::new()
@@ -188,8 +181,8 @@ let optimizer = LevenbergMarquardt::new()
     .with_max_iterations(200)
     
     // Set convergence tolerances
-    .with_epsilon_1(1e-8) // For relative reduction in residuals
-    .with_epsilon_2(1e-8) // For relative change in parameters
+    .with_ftol(1e-8) // Relative reduction in residual norm
+    .with_xtol(1e-8) // Relative parameter-step tolerance
     
     // Set initial damping parameter
     .with_tau(1e-3)
@@ -217,6 +210,9 @@ if result.success {
     
     // Performance information
     println!("Iterations: {}", result.iterations);
+    println!("Accepted/rejected steps: {}/{}", result.accepted_steps, result.rejected_steps);
+    println!("Residual evaluations: {}", result.residual_evaluations);
+    println!("Jacobian evaluations: {}", result.jacobian_evaluations);
     println!("Execution time: {:?}", result.execution_time);
     println!("Jacobian method used: {:?}", result.jacobian_method_used);
 } else {
@@ -246,43 +242,25 @@ cargo run --example jacobian_methods
 For optimal performance:
 
 1. **Provide an analytical Jacobian** when possible
-2. Use **automatic differentiation** for complex functions when analytical Jacobian is difficult
-3. Use **central differences** when numerical differentiation is required
-4. **Scale your parameters** appropriately to improve convergence
-5. Take advantage of **faer's optimizations** for matrix operations
+2. Use **central differences** when an analytical Jacobian is unavailable
+3. **Scale your parameters** appropriately to improve convergence
+4. Take advantage of **faer's optimizations** for matrix operations
 
-## Automatic Differentiation
+## Automatic Differentiation Status
 
-This library supports Rust's experimental `std::autodiff` module for automatic Jacobian calculation. This provides:
+An Enzyme-backed implementation is not currently shipped. Selecting
+`JacobianMethod::AutoDiff` returns `Error::AutoDiffUnavailable`; it never
+silently substitutes numerical differentiation. `JacobianMethod::Auto` is the
+recommended default today.
 
-- **Exact Derivatives**: No approximation errors like with numerical methods
-- **Ease of Use**: No need to manually derive and implement complex Jacobians
-- **Performance**: Often faster than numerical differentiation
-- **Flexibility**: Works with arbitrary differentiable functions
-
-To use autodiff:
-
-1. Enable the feature in your Cargo.toml:
-   ```toml
-   lmopt = { version = "0.1.0", features = ["autodiff"] }
-   ```
-
-2. Use nightly Rust:
-   ```
-   rustup override set nightly
-   ```
-
-3. Choose autodiff in your optimizer:
-   ```rust
-   let optimizer = LevenbergMarquardt::new()
-       .with_jacobian_method(JacobianMethod::AutoDiff);
-   ```
-
-See the [autodiff_example.rs](examples/autodiff_example.rs) for a complete demonstration.
+Future Enzyme support will require a separate monomorphized residual interface,
+nightly Rust with the Enzyme component, release mode, and fat LTO. It will be
+introduced behind an experimental feature only after it has correctness and
+performance benchmarks against the existing Jacobian methods.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License; see `LICENSE` for details.
 
 ## Acknowledgments
 

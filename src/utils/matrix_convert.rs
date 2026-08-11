@@ -1,7 +1,10 @@
 use crate::Result;
 use faer::Mat;
+#[cfg(any(feature = "nalgebra", feature = "ndarray"))]
 use faer_traits::RealField;
+#[cfg(feature = "nalgebra")]
 use nalgebra::{DMatrix, DVector};
+#[cfg(feature = "ndarray")]
 use ndarray::{Array1, Array2};
 
 /// Trait for converting matrices from different libraries to faer matrices
@@ -19,6 +22,7 @@ pub trait FromFaer<T> {
 }
 
 // Implementation for ndarray -> faer
+#[cfg(feature = "ndarray")]
 impl<T: RealField + Copy> IntoFaer<T> for &Array2<T> {
     fn into_faer(self) -> Result<Mat<T>> {
         let rows = self.nrows();
@@ -36,6 +40,7 @@ impl<T: RealField + Copy> IntoFaer<T> for &Array2<T> {
 }
 
 // Implementation for ndarray vector -> faer
+#[cfg(feature = "ndarray")]
 impl<T: RealField + Copy> IntoFaer<T> for &Array1<T> {
     fn into_faer(self) -> Result<Mat<T>> {
         let rows = self.len();
@@ -50,6 +55,7 @@ impl<T: RealField + Copy> IntoFaer<T> for &Array1<T> {
 }
 
 // Implementation for nalgebra -> faer
+#[cfg(feature = "nalgebra")]
 impl<T: RealField + Copy> IntoFaer<T> for &DMatrix<T> {
     fn into_faer(self) -> Result<Mat<T>> {
         let rows = self.nrows();
@@ -67,6 +73,7 @@ impl<T: RealField + Copy> IntoFaer<T> for &DMatrix<T> {
 }
 
 // Implementation for nalgebra vector -> faer
+#[cfg(feature = "nalgebra")]
 impl<T: RealField + Copy> IntoFaer<T> for &DVector<T> {
     fn into_faer(self) -> Result<Mat<T>> {
         let rows = self.nrows();
@@ -81,6 +88,7 @@ impl<T: RealField + Copy> IntoFaer<T> for &DVector<T> {
 }
 
 // Implementation for faer -> ndarray
+#[cfg(feature = "ndarray")]
 impl<T: RealField + Copy> FromFaer<T> for Array2<T> {
     fn from_faer(mat: &Mat<T>) -> Result<Self> {
         let rows = mat.nrows();
@@ -98,6 +106,7 @@ impl<T: RealField + Copy> FromFaer<T> for Array2<T> {
 }
 
 // Implementation for faer -> ndarray vector (from column vector)
+#[cfg(feature = "ndarray")]
 impl<T: RealField + Copy> FromFaer<T> for Array1<T> {
     fn from_faer(mat: &Mat<T>) -> Result<Self> {
         let rows = mat.nrows();
@@ -105,7 +114,7 @@ impl<T: RealField + Copy> FromFaer<T> for Array1<T> {
 
         // Check if the matrix is a column vector
         if cols != 1 {
-            return Err(crate::Error::DimensionMismatch("Cannot convert matrix to Array1: not a column vector".to_string()).into());
+            return Err(crate::Error::DimensionMismatch("Cannot convert matrix to Array1: not a column vector".to_string()));
         }
 
         let mut result = Array1::zeros(rows);
@@ -119,6 +128,7 @@ impl<T: RealField + Copy> FromFaer<T> for Array1<T> {
 }
 
 // Implementation for faer -> nalgebra
+#[cfg(feature = "nalgebra")]
 impl<T: RealField + Copy + 'static> FromFaer<T> for DMatrix<T> {
     fn from_faer(mat: &Mat<T>) -> Result<Self> {
         let rows = mat.nrows();
@@ -136,6 +146,7 @@ impl<T: RealField + Copy + 'static> FromFaer<T> for DMatrix<T> {
 }
 
 // Implementation for faer -> nalgebra vector (from column vector)
+#[cfg(feature = "nalgebra")]
 impl<T: RealField + Copy + 'static> FromFaer<T> for DVector<T> {
     fn from_faer(mat: &Mat<T>) -> Result<Self> {
         let rows = mat.nrows();
@@ -143,7 +154,7 @@ impl<T: RealField + Copy + 'static> FromFaer<T> for DVector<T> {
 
         // Check if the matrix is a column vector
         if cols != 1 {
-            return Err(crate::Error::DimensionMismatch("Cannot convert matrix to DVector: not a column vector".to_string()).into());
+            return Err(crate::Error::DimensionMismatch("Cannot convert matrix to DVector: not a column vector".to_string()));
         }
 
         let mut result = DVector::zeros(rows);

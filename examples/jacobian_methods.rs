@@ -1,6 +1,4 @@
-use anyhow::Context;
 use lmopt::{JacobianMethod, LeastSquaresProblem, LevenbergMarquardt, Result};
-use std::time::Instant;
 
 // Rosenbrock function: f(x,y) = (1-x)² + 100(y-x²)²
 // Minimum at (1, 1)
@@ -49,14 +47,12 @@ fn main() -> Result<()> {
 
     // Test all available Jacobian methods
     for method in [
+        JacobianMethod::Auto,
         JacobianMethod::UserProvided,
         JacobianMethod::NumericalForward,
         JacobianMethod::NumericalCentral,
         JacobianMethod::NumericalBackward,
-        JacobianMethod::AutoDiff, // Will typically fall back to numerical methods
     ] {
-        let start = Instant::now();
-
         // Create optimizer with specific Jacobian method
         let optimizer = LevenbergMarquardt::new()
             .with_max_iterations(100)
@@ -65,9 +61,7 @@ fn main() -> Result<()> {
             .with_jacobian_method(method);
 
         // Solve the optimization problem
-        let result = optimizer.minimize(&problem, &initial_guess).with_context(|| format!("Failed to minimize with {:?}", method))?;
-
-        let duration = start.elapsed();
+        let result = optimizer.minimize(&problem, &initial_guess)?;
 
         // Extract the optimized parameters
         let x = result.solution_params[(0, 0)];
@@ -79,12 +73,15 @@ fn main() -> Result<()> {
         println!("  Error from true minimum: {:.6e}", ((x - 1.0).powi(2) + (y - 1.0).powi(2)).sqrt());
         println!("  Iterations: {}", result.iterations);
         println!("  Final objective value: {:.6e}", result.objective_function);
-        println!("  Computation time: {:?}", duration);
-        println!("  Execution time (reported): {:?}", result.execution_time);
+        println!("  Execution time: {:?}", result.execution_time);
+        println!("  Residual evaluations: {}", result.residual_evaluations);
+        println!("  Jacobian evaluations: {}", result.jacobian_evaluations);
         println!("  Success: {}", result.success);
         println!("  Termination reason: {:?}", result.termination_reason);
         println!();
     }
+
+    println!("One-shot example timings include initialization effects; use a benchmark harness for performance comparisons.");
 
     Ok(())
 }

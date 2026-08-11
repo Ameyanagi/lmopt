@@ -58,7 +58,7 @@ fn test_compare_numerical_with_analytical() {
     let problem = NonlinearProblem;
 
     // Test with multiple parameter values to ensure robust comparison
-    let test_points = vec![
+    let test_points = [
         // (x, y)
         (1.0, 2.0),
         (0.5, -1.5),
@@ -120,37 +120,6 @@ fn test_compare_numerical_with_analytical() {
         }
     }
 }
-
-// This test is only enabled when autodiff feature is active
-// We can add this back when autodiff is properly implemented
-/*
-#[test]
-#[cfg(feature = "autodiff")]
-fn test_compare_autodiff_with_numerical() {
-    let problem = NonlinearProblem;
-    let params = Mat::from_fn(2, 1, |i, _| if i == 0 { 1.0 } else { 2.0 });
-
-    // Calculate Jacobian using autodiff
-    let autodiff_calculator = get_jacobian_calculator::<f64>(JacobianMethod::AutoDiff, 0.0);
-    let autodiff_jacobian = autodiff_calculator.calculate_jacobian(&problem, &params).unwrap();
-
-    // Calculate Jacobian using numerical central differences
-    let numerical_calculator = get_jacobian_calculator::<f64>(JacobianMethod::NumericalCentral, 1e-6);
-    let numerical_jacobian = numerical_calculator.calculate_jacobian(&problem, &params).unwrap();
-
-    // Compare autodiff with numerical
-    for row in 0..4 {
-        for col in 0..2 {
-            assert_relative_eq!(
-                autodiff_jacobian[(row, col)],
-                numerical_jacobian[(row, col)],
-                max_relative=1e-6,
-                epsilon=1e-6
-            );
-        }
-    }
-}
-*/
 
 #[test]
 fn test_numerical_methods_comparison() {

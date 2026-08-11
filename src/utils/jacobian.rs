@@ -1,12 +1,23 @@
-use crate::{lm::JacobianMethod, utils::finite_difference::FiniteDifferenceMethod, Error, LeastSquaresProblem, Result};
+use crate::{
+    lm::JacobianMethod,
+    utils::finite_difference::{calculate_jacobian_with_residuals, FiniteDifferenceMethod},
+    Error, LeastSquaresProblem, Result,
+};
 use faer::Mat;
 use faer_traits::RealField;
-use num_traits::FromPrimitive;
+use num_traits::{Float, FromPrimitive};
+use std::cell::Cell;
 
 /// Trait for calculating Jacobian matrices.
 pub trait JacobianCalculator<T: RealField + Copy> {
     /// Calculate the Jacobian matrix for the given problem and parameters.
     fn calculate_jacobian(&self, problem: &dyn EraseTypes<T>, parameters: &Mat<T>) -> Result<Mat<T>>;
+
+    /// Calculate a Jacobian while reusing residuals already evaluated at
+    /// `parameters`. Calculators that cannot reuse them may use the default.
+    fn calculate_jacobian_with_residuals(&self, problem: &dyn EraseTypes<T>, parameters: &Mat<T>, _residuals: &Mat<T>) -> Result<Mat<T>> {
+        self.calculate_jacobian(problem, parameters)
+    }
 
     /// Returns the method used for Jacobian calculation.
     fn method_used(&self) -> JacobianMethod;
@@ -18,7 +29,7 @@ pub trait EraseTypes<T: RealField + Copy> {
     fn erased_residuals(&self, parameters: &Mat<T>) -> Result<Mat<T>>;
 
     /// Optionally compute the Jacobian matrix for the given parameters.
-    fn erased_jacobian(&self, parameters: &Mat<T>) -> Option<Mat<T>>;
+    fn erased_jacobian(&self, parameters: &Mat<T>) -> Result<Option<Mat<T>>>;
 }
 
 // Implement EraseTypes for any type that implements LeastSquaresProblem
@@ -27,8 +38,8 @@ impl<T: RealField + Copy, P: LeastSquaresProblem<T>> EraseTypes<T> for P {
         self.residuals(parameters)
     }
 
-    fn erased_jacobian(&self, parameters: &Mat<T>) -> Option<Mat<T>> {
-        self.jacobian(parameters)
+    fn erased_jacobian(&self, parameters: &Mat<T>) -> Result<Option<Mat<T>>> {
+        self.try_jacobian(parameters)
     }
 }
 
@@ -37,9 +48,9 @@ pub struct UserProvidedJacobian;
 
 impl<T: RealField + Copy> JacobianCalculator<T> for UserProvidedJacobian {
     fn calculate_jacobian(&self, problem: &dyn EraseTypes<T>, parameters: &Mat<T>) -> Result<Mat<T>> {
-        match problem.erased_jacobian(parameters) {
+        match problem.erased_jacobian(parameters)? {
             Some(jacobian) => Ok(jacobian),
-            None => Err(Error::UserFunction("No user-provided Jacobian".to_string()).into()),
+            None => Err(Error::UserFunction("No user-provided Jacobian".to_string())),
         }
     }
 
@@ -61,75 +72,24 @@ impl NumericalJacobian {
     }
 }
 
-impl<T: RealField + Copy + num_traits::FromPrimitive> JacobianCalculator<T> for NumericalJacobian {
+impl NumericalJacobian {
+    fn calculate_with_residuals<T>(&self, problem: &dyn EraseTypes<T>, parameters: &Mat<T>, residuals: &Mat<T>) -> Result<Mat<T>>
+    where
+        T: RealField + Copy + Float + FromPrimitive,
+    {
+        let relative_step = T::from_f64(self.step_size).ok_or_else(|| Error::Numerical("Failed to convert step size".to_string()))?;
+        calculate_jacobian_with_residuals(parameters, residuals, relative_step, self.method, |perturbed| problem.erased_residuals(perturbed))
+    }
+}
+
+impl<T: RealField + Copy + Float + FromPrimitive> JacobianCalculator<T> for NumericalJacobian {
     fn calculate_jacobian(&self, problem: &dyn EraseTypes<T>, parameters: &Mat<T>) -> Result<Mat<T>> {
-        // Convert the step size
-        let step_size = T::from_f64(self.step_size).ok_or_else(|| Error::Numerical("Failed to convert step size".to_string()))?;
-
-        // Calculate using numerical differentiation
         let residuals = problem.erased_residuals(parameters)?;
-        let n_params = parameters.nrows();
-        let n_residuals = residuals.nrows();
+        self.calculate_with_residuals(problem, parameters, &residuals)
+    }
 
-        let mut jacobian = Mat::zeros(n_residuals, n_params);
-        let mut perturbed_params = parameters.clone();
-
-        for j in 0..n_params {
-            match self.method {
-                FiniteDifferenceMethod::Forward => {
-                    // Forward difference: (f(x+h) - f(x)) / h
-                    let original_val = parameters[(j, 0)];
-                    perturbed_params[(j, 0)] = original_val + step_size;
-
-                    let perturbed_residuals = problem.erased_residuals(&perturbed_params)?;
-
-                    // Calculate derivative
-                    for i in 0..n_residuals {
-                        jacobian[(i, j)] = (perturbed_residuals[(i, 0)] - residuals[(i, 0)]) / step_size;
-                    }
-
-                    // Restore original value
-                    perturbed_params[(j, 0)] = original_val;
-                }
-                FiniteDifferenceMethod::Central => {
-                    // Central difference: (f(x+h) - f(x-h)) / (2*h)
-                    let original_val = parameters[(j, 0)];
-
-                    // f(x+h)
-                    perturbed_params[(j, 0)] = original_val + step_size;
-                    let forward_residuals = problem.erased_residuals(&perturbed_params)?;
-
-                    // f(x-h)
-                    perturbed_params[(j, 0)] = original_val - step_size;
-                    let backward_residuals = problem.erased_residuals(&perturbed_params)?;
-
-                    // Calculate derivative
-                    for i in 0..n_residuals {
-                        jacobian[(i, j)] = (forward_residuals[(i, 0)] - backward_residuals[(i, 0)]) / (step_size + step_size);
-                    }
-
-                    // Restore original value
-                    perturbed_params[(j, 0)] = original_val;
-                }
-                FiniteDifferenceMethod::Backward => {
-                    // Backward difference: (f(x) - f(x-h)) / h
-                    let original_val = parameters[(j, 0)];
-                    perturbed_params[(j, 0)] = original_val - step_size;
-
-                    let perturbed_residuals = problem.erased_residuals(&perturbed_params)?;
-
-                    // Calculate derivative
-                    for i in 0..n_residuals {
-                        jacobian[(i, j)] = (residuals[(i, 0)] - perturbed_residuals[(i, 0)]) / step_size;
-                    }
-
-                    // Restore original value
-                    perturbed_params[(j, 0)] = original_val;
-                }
-            }
-        }
-
-        Ok(jacobian)
+    fn calculate_jacobian_with_residuals(&self, problem: &dyn EraseTypes<T>, parameters: &Mat<T>, residuals: &Mat<T>) -> Result<Mat<T>> {
+        self.calculate_with_residuals(problem, parameters, residuals)
     }
 
     fn method_used(&self) -> JacobianMethod {
@@ -141,58 +101,72 @@ impl<T: RealField + Copy + num_traits::FromPrimitive> JacobianCalculator<T> for 
     }
 }
 
+/// Automatically chooses an analytical Jacobian when present and otherwise
+/// uses central finite differences.
+pub struct AutoJacobian {
+    numerical: NumericalJacobian,
+    method_used: Cell<JacobianMethod>,
+}
+
+impl AutoJacobian {
+    fn new(step_size: f64) -> Self {
+        Self {
+            numerical: NumericalJacobian::new(FiniteDifferenceMethod::Central, step_size),
+            method_used: Cell::new(JacobianMethod::Auto),
+        }
+    }
+}
+
+impl<T: RealField + Copy + Float + FromPrimitive> JacobianCalculator<T> for AutoJacobian {
+    fn calculate_jacobian(&self, problem: &dyn EraseTypes<T>, parameters: &Mat<T>) -> Result<Mat<T>> {
+        if let Some(jacobian) = problem.erased_jacobian(parameters)? {
+            self.method_used.set(JacobianMethod::UserProvided);
+            Ok(jacobian)
+        } else {
+            self.method_used.set(JacobianMethod::NumericalCentral);
+            self.numerical.calculate_jacobian(problem, parameters)
+        }
+    }
+
+    fn calculate_jacobian_with_residuals(&self, problem: &dyn EraseTypes<T>, parameters: &Mat<T>, residuals: &Mat<T>) -> Result<Mat<T>> {
+        if let Some(jacobian) = problem.erased_jacobian(parameters)? {
+            self.method_used.set(JacobianMethod::UserProvided);
+            Ok(jacobian)
+        } else {
+            self.method_used.set(JacobianMethod::NumericalCentral);
+            self.numerical.calculate_jacobian_with_residuals(problem, parameters, residuals)
+        }
+    }
+
+    fn method_used(&self) -> JacobianMethod {
+        self.method_used.get()
+    }
+}
+
+/// Placeholder that fails explicitly rather than silently performing finite
+/// differences while claiming they came from automatic differentiation.
+pub struct UnavailableAutoDiff;
+
+impl<T: RealField + Copy> JacobianCalculator<T> for UnavailableAutoDiff {
+    fn calculate_jacobian(&self, _problem: &dyn EraseTypes<T>, _parameters: &Mat<T>) -> Result<Mat<T>> {
+        Err(Error::AutoDiffUnavailable(
+            "the Enzyme-backed implementation is not yet available; use JacobianMethod::Auto, provide an analytical Jacobian, or choose a numerical method".to_string(),
+        ))
+    }
+
+    fn method_used(&self) -> JacobianMethod {
+        JacobianMethod::AutoDiff
+    }
+}
+
 // Factory function to create appropriate JacobianCalculator based on method
-pub fn get_jacobian_calculator<T: RealField + Copy + num_traits::FromPrimitive + 'static>(method: JacobianMethod, step_size: f64) -> Box<dyn JacobianCalculator<T>> {
+pub fn get_jacobian_calculator<T: RealField + Copy + Float + FromPrimitive + 'static>(method: JacobianMethod, step_size: f64) -> Box<dyn JacobianCalculator<T>> {
     match method {
+        JacobianMethod::Auto => Box::new(AutoJacobian::new(step_size)),
         JacobianMethod::UserProvided => Box::new(UserProvidedJacobian),
         JacobianMethod::NumericalCentral => Box::new(NumericalJacobian::new(FiniteDifferenceMethod::Central, step_size)),
         JacobianMethod::NumericalForward => Box::new(NumericalJacobian::new(FiniteDifferenceMethod::Forward, step_size)),
         JacobianMethod::NumericalBackward => Box::new(NumericalJacobian::new(FiniteDifferenceMethod::Backward, step_size)),
-        #[cfg(feature = "autodiff")]
-        JacobianMethod::AutoDiff => {
-            // Check the concrete type
-            let type_name = std::any::type_name::<T>();
-
-            match type_name {
-                "f64" => {
-                    #[allow(clippy::needless_borrow)]
-                    // Use transmute is safe here because we're checking types at runtime
-                    let calculator: Box<dyn JacobianCalculator<T>> = if type_name == "f64" {
-                        use crate::utils::autodiff::AutoDiffJacobian;
-                        // First create a box with the concrete type
-                        let boxed: Box<dyn JacobianCalculator<f64>> = Box::new(AutoDiffJacobian);
-                        // Then safely transmute to the generic type, which is actually f64
-                        unsafe { std::mem::transmute(boxed) }
-                    } else if type_name == "f32" {
-                        use crate::utils::autodiff::AutoDiffJacobian;
-                        // First create a box with the concrete type
-                        let boxed: Box<dyn JacobianCalculator<f32>> = Box::new(AutoDiffJacobian);
-                        // Then safely transmute to the generic type, which is actually f32
-                        unsafe { std::mem::transmute(boxed) }
-                    } else {
-                        // For other types, fall back to numerical differentiation
-                        eprintln!("AutoDiff only supports f32/f64, falling back to numerical differentiation");
-                        Box::new(NumericalJacobian::new(FiniteDifferenceMethod::Central, step_size))
-                    };
-
-                    calculator
-                }
-                "f32" => {
-                    use crate::utils::autodiff::AutoDiffJacobian;
-                    let boxed: Box<dyn JacobianCalculator<f32>> = Box::new(AutoDiffJacobian);
-                    unsafe { std::mem::transmute(boxed) }
-                }
-                _ => {
-                    eprintln!("AutoDiff only supports f32/f64, falling back to numerical differentiation for {}", type_name);
-                    Box::new(NumericalJacobian::new(FiniteDifferenceMethod::Central, step_size))
-                }
-            }
-        }
-        #[cfg(not(feature = "autodiff"))]
-        JacobianMethod::AutoDiff => {
-            // Fall back to central difference if autodiff is not available
-            eprintln!("Warning: AutoDiff was requested but the feature is not enabled. Falling back to numerical differentiation.");
-            Box::new(NumericalJacobian::new(FiniteDifferenceMethod::Central, step_size))
-        }
+        JacobianMethod::AutoDiff => Box::new(UnavailableAutoDiff),
     }
 }
