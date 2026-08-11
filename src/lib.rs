@@ -8,6 +8,7 @@
 //!
 //! - **Powerful Optimizer**: Robust Levenberg-Marquardt implementation with trust region strategy
 //! - **High Performance**: Built on the `faer` library for fast matrix operations
+//! - **Robust Linear Solves**: Augmented column-pivoted QR with truncated-SVD fallback
 //! - **Multiple Jacobian Methods**:
 //!   - Automatic selection between analytical and numerical differentiation
 //!   - User-provided custom analytical Jacobian
@@ -34,7 +35,7 @@
 //!
 //!     // Optionally provide an analytical Jacobian
 //!     fn jacobian(&self, parameters: &faer::Mat<f64>) -> Option<faer::Mat<f64>> {
-//!         // Your Jacobian calculation here, or return None to use automatic/numerical differentiation
+//!         // Return None to let the default Auto strategy use central differences
 //!         None
 //!     }
 //! }
@@ -71,8 +72,8 @@
 //! 3. **Numerical Differentiation**:
 //!    - Forward differences: `(f(x+h) - f(x)) / h`
 //!    - Central differences: `(f(x+h) - f(x-h)) / (2*h)` (more accurate)
-//!    - Backward differences: `f(x) - f(x-h) / h`
-//! 4. **Automatic Differentiation**: Reserved for a future Enzyme backend;
+//!    - Backward differences: `(f(x) - f(x-h)) / h`
+//! 4. **Automatic Differentiation**: Reserved for a future stable Enzyme backend;
 //!    requesting it currently returns [`Error::AutoDiffUnavailable`].
 //!
 //! ## Performance Considerations
@@ -83,6 +84,7 @@
 //! - Use central differences when numerical differentiation is required
 //! - Scale your parameters appropriately to improve convergence
 //! - For very large problems, consider the trust region approach's memory usage
+//! - Use the Criterion harness (`cargo bench --bench performance`) for comparisons
 //!
 //! ## Advanced Features
 //!

@@ -216,6 +216,9 @@ where
 
     /// Final damping parameter.
     pub final_lambda: T,
+
+    /// Number of rank-deficient linearized systems solved with truncated SVD.
+    pub svd_fallbacks: usize,
 }
 
 /// Configuration for the Levenberg-Marquardt optimization algorithm.

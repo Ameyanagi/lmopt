@@ -1,7 +1,8 @@
 [package]
 name = "lmopt"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
+rust-version = "1.85"
 authors = ["LMOpt Contributors"]
 description = "Levenberg-Marquardt optimization with the faer linear algebra library"
 license = "MIT"
@@ -31,10 +32,16 @@ minpack-compat = []
 
 [dev-dependencies]
 approx = "0.5.1"
+criterion = { version = "0.7.0", default-features = false, features = ["cargo_bench_support"] }
+proptest = { version = "1.11.0", default-features = false, features = ["std"] }
 
 [lib]
 name = "lmopt"
 path = "src/lib.rs"
+
+[[bench]]
+name = "performance"
+harness = false
 
 [package.metadata.docs.rs]
 all-features = true

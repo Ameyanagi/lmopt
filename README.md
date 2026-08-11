@@ -9,6 +9,7 @@ A high-performance Rust implementation of the Levenberg-Marquardt algorithm for 
 
 - **Powerful Optimizer**: Robust implementation of the Levenberg-Marquardt algorithm with trust region strategy
 - **High Performance**: Built on the highly optimized `faer` library for efficient matrix operations
+- **Robust Linear Solves**: Damped least squares uses column-pivoted QR with a truncated-SVD fallback for rank-deficient systems
 - **Multiple Jacobian Methods**:
   - Automatic selection of the best available implemented method
   - User-provided analytical Jacobian
@@ -102,7 +103,7 @@ Add `lmopt` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-lmopt = "0.1.0"
+lmopt = "0.2.0"
 faer = "0.22.6"  # Required dependency
 ```
 
@@ -110,12 +111,12 @@ Enable only the interoperability you need:
 
 ```toml
 [dependencies]
-lmopt = { version = "0.1.0", features = ["ndarray", "nalgebra"] }
+lmopt = { version = "0.2.0", features = ["ndarray", "nalgebra"] }
 ```
 
 ## Requirements
 
-- Stable Rust
+- Rust 1.85 or newer
 - Dependencies:
   - faer = "0.22.6"
   - ndarray = "0.16.1" (optional interoperability feature)
@@ -142,7 +143,7 @@ impl LeastSquaresProblem<f64> for MyProblem {
     // Optional: Provide analytical Jacobian (recommended for performance)
     fn jacobian(&self, parameters: &faer::Mat<f64>) -> Option<faer::Mat<f64>> {
         // Your implementation here...
-        // Return None to use automatic or numerical differentiation
+        // Return None to let the default Auto strategy use central differences
     }
     
 }
@@ -215,6 +216,7 @@ if result.success {
     println!("Jacobian evaluations: {}", result.jacobian_evaluations);
     println!("Execution time: {:?}", result.execution_time);
     println!("Jacobian method used: {:?}", result.jacobian_method_used);
+    println!("SVD fallbacks: {}", result.svd_fallbacks);
 } else {
     // Analyze why optimization failed
     println!("Optimization failed: {:?}", result.termination_reason);
@@ -246,6 +248,18 @@ For optimal performance:
 3. **Scale your parameters** appropriately to improve convergence
 4. Take advantage of **faer's optimizations** for matrix operations
 
+Reproducible Criterion benchmarks cover Jacobian construction and end-to-end
+optimization at multiple problem sizes:
+
+```text
+cargo bench --bench performance
+```
+
+Treat the results as the baseline for performance changes; the example timing
+output is intended for diagnostics, not benchmarking. The first measured
+baseline and reproduction command are recorded in
+[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
+
 ## Automatic Differentiation Status
 
 An Enzyme-backed implementation is not currently shipped. Selecting
@@ -253,10 +267,18 @@ An Enzyme-backed implementation is not currently shipped. Selecting
 silently substitutes numerical differentiation. `JacobianMethod::Auto` is the
 recommended default today.
 
-Future Enzyme support will require a separate monomorphized residual interface,
-nightly Rust with the Enzyme component, release mode, and fat LTO. It will be
-introduced behind an experimental feature only after it has correctness and
-performance benchmarks against the existing Jacobian methods.
+The isolated nightly prototype in `experiments/enzyme` now generates and checks
+a Rosenbrock Jacobian using `std::autodiff`. See
+[`docs/AUTODIFF.md`](docs/AUTODIFF.md) for its pinned toolchain, validation
+command, limitations, and integration criteria. It remains separate from the
+stable API until its compiler and performance constraints are suitable for
+library users.
+
+## Upgrading
+
+Version 0.2 changes error handling, Jacobian defaults, diagnostics, and minimum
+Rust version. See [`docs/MIGRATING-0.2.md`](docs/MIGRATING-0.2.md) and
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ## License
 

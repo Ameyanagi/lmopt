@@ -1,10 +1,10 @@
 use crate::{Error, Result};
-use faer::{linalg::solvers::Solve, mat::Mat, Side};
+use faer::{linalg::solvers::SolveLstsq, mat::Mat};
 use faer_traits::RealField;
 use num_traits::{Float, FromPrimitive};
 use std::ops::{AddAssign, Mul};
 
-/// Struct for the LM parameter update
+/// Struct for the LM parameter update.
 #[derive(Debug)]
 pub(crate) struct LMParameterUpdate<T>
 where
@@ -13,69 +13,154 @@ where
     pub step: Mat<T>,
     pub step_norm: T,
     pub predicted_reduction: T,
+    pub used_svd_fallback: bool,
 }
 
 /// Quantities that remain unchanged while only the damping parameter changes.
-pub(crate) struct NormalEquations<T>
+pub(crate) struct Linearization<T>
 where
     T: RealField + Copy,
 {
-    jtj: Mat<T>,
-    jtr: Mat<T>,
+    gradient: Mat<T>,
 }
 
-impl<T> NormalEquations<T>
+impl<T> Linearization<T>
 where
     T: RealField + Copy + Mul<Output = T>,
 {
     pub(crate) fn new(jacobian: &Mat<T>, residuals: &Mat<T>) -> Self {
         Self {
-            jtj: jacobian.transpose().mul(jacobian),
-            jtr: jacobian.transpose().mul(residuals),
+            gradient: jacobian.transpose().mul(residuals),
         }
     }
 }
 
-/// Calculate the parameter update for a given lambda using the trust region approach
-pub(crate) fn calculate_parameter_update<T>(normal: &NormalEquations<T>, lambda: T, diag: &Mat<T>) -> Result<LMParameterUpdate<T>>
+fn rank_threshold<T>(nrows: usize, ncols: usize, scale: T) -> T
+where
+    T: RealField + Copy + Float + FromPrimitive,
+{
+    scale * T::epsilon() * T::from_usize(nrows.max(ncols)).unwrap()
+}
+
+fn solve_with_truncated_svd<T>(matrix: &Mat<T>, rhs: &Mat<T>) -> Result<Mat<T>>
 where
     T: RealField + Copy + Float + FromPrimitive + AddAssign,
 {
-    let n = normal.jtj.ncols();
+    let svd = matrix.thin_svd().map_err(|error| Error::MatrixError(format!("augmented least-squares SVD failed: {error:?}")))?;
+    let singular_values = svd.S();
+    let size = matrix.nrows().min(matrix.ncols());
+    let mut largest = T::zero();
+    for k in 0..size {
+        largest = Float::max(largest, Float::abs(singular_values[k]));
+    }
+    let threshold = rank_threshold(matrix.nrows(), matrix.ncols(), largest);
 
-    // Create the augmented matrix (J^T * J + lambda * diag^2)
-    let mut augmented = normal.jtj.clone();
+    let u = svd.U();
+    let v = svd.V();
+    let mut solution = Mat::zeros(matrix.ncols(), rhs.ncols());
+
+    // Compute V * S^+ * U^T * rhs while truncating numerically zero
+    // singular values. faer's general solve API intentionally performs an
+    // exact reciprocal, so the tolerance must be applied here.
+    for rhs_col in 0..rhs.ncols() {
+        for k in 0..size {
+            let singular_value = singular_values[k];
+            if Float::abs(singular_value) <= threshold {
+                continue;
+            }
+
+            let mut coefficient = T::zero();
+            for i in 0..matrix.nrows() {
+                coefficient += u[(i, k)] * rhs[(i, rhs_col)];
+            }
+            coefficient = coefficient / singular_value;
+
+            for j in 0..matrix.ncols() {
+                solution[(j, rhs_col)] += v[(j, k)] * coefficient;
+            }
+        }
+    }
+
+    Ok(solution)
+}
+
+fn solve_augmented_least_squares<T>(matrix: &Mat<T>, rhs: &Mat<T>) -> Result<(Mat<T>, bool)>
+where
+    T: RealField + Copy + Float + FromPrimitive + AddAssign,
+{
+    let qr = matrix.col_piv_qr();
+    let r = qr.thin_R();
+    let n = matrix.ncols();
+    let mut largest_diagonal = T::zero();
     for i in 0..n {
-        augmented[(i, i)] += lambda * diag[(i, 0)] * diag[(i, 0)];
+        largest_diagonal = Float::max(largest_diagonal, Float::abs(r[(i, i)]));
+    }
+    let threshold = rank_threshold(matrix.nrows(), matrix.ncols(), largest_diagonal);
+    let full_rank = (0..n).all(|i| Float::abs(r[(i, i)]) > threshold);
+
+    if full_rank {
+        Ok((qr.solve_lstsq(rhs), false))
+    } else {
+        Ok((solve_with_truncated_svd(matrix, rhs)?, true))
+    }
+}
+
+/// Calculate the parameter update by solving the damped least-squares system
+/// directly:
+///
+/// ```text
+/// min || J s + r ||² + lambda || D s ||²
+/// ```
+///
+/// This avoids explicitly forming `J^T J`, which squares the condition number.
+pub(crate) fn calculate_parameter_update<T>(jacobian: &Mat<T>, residuals: &Mat<T>, linearization: &Linearization<T>, lambda: T, diag: &Mat<T>) -> Result<LMParameterUpdate<T>>
+where
+    T: RealField + Copy + Float + FromPrimitive + AddAssign,
+{
+    if !Float::is_finite(lambda) || lambda < T::zero() {
+        return Err(Error::Numerical("Damping parameter must be finite and non-negative".to_string()));
     }
 
-    // Solve the symmetric positive-definite damped normal system with faer's
-    // Cholesky implementation. Unlike the previous handwritten elimination,
-    // this reports a factorization failure instead of dividing by a zero pivot.
-    let mut b = normal.jtr.clone();
-    for i in 0..b.nrows() {
-        b[(i, 0)] = -b[(i, 0)];
+    let m = jacobian.nrows();
+    let n = jacobian.ncols();
+    let mut augmented = Mat::zeros(m + n, n);
+    for j in 0..n {
+        for i in 0..m {
+            augmented[(i, j)] = jacobian[(i, j)];
+        }
     }
-    let factor = augmented
-        .llt(Side::Lower)
-        .map_err(|error| Error::MatrixError(format!("damped normal matrix is not positive definite: {error:?}")))?;
-    let step = factor.solve(&b);
 
+    let damping_scale = Float::sqrt(lambda);
+    for j in 0..n {
+        augmented[(m + j, j)] = damping_scale * diag[(j, 0)];
+    }
+
+    let mut rhs = Mat::zeros(m + n, 1);
+    for i in 0..m {
+        rhs[(i, 0)] = -residuals[(i, 0)];
+    }
+
+    let (step, used_svd_fallback) = solve_augmented_least_squares(&augmented, &rhs)?;
     let step_norm = step.norm_l2();
 
-    // From (JᵀJ + λD²)s = -Jᵀr, the quadratic-model reduction is
-    // 0.5 * sᵀ(λD²s - Jᵀr).
+    // From (J^T J + lambda D²)s = -J^T r, the quadratic-model reduction is
+    // 0.5 * s^T(lambda D²s - J^T r).
     let half = T::from_f64(0.5).unwrap();
     let mut predicted_reduction = T::zero();
     for i in 0..n {
         let damped_step = lambda * diag[(i, 0)] * diag[(i, 0)] * step[(i, 0)];
-        predicted_reduction += half * step[(i, 0)] * (damped_step - normal.jtr[(i, 0)]);
+        predicted_reduction += half * step[(i, 0)] * (damped_step - linearization.gradient[(i, 0)]);
     }
 
-    Ok(LMParameterUpdate { step, step_norm, predicted_reduction })
+    Ok(LMParameterUpdate {
+        step,
+        step_norm,
+        predicted_reduction,
+        used_svd_fallback,
+    })
 }
 
-/// Adjust the damping parameter lambda based on the ratio of actual to predicted reduction
+/// Adjust the damping parameter lambda based on the ratio of actual to predicted reduction.
 pub(crate) fn adjust_lambda<T>(lambda: T, ratio: T, success: bool) -> T
 where
     T: RealField + Copy + Float + FromPrimitive + AddAssign,
@@ -87,61 +172,79 @@ where
     let max_ratio = T::from_f64(0.75).unwrap();
 
     if !success {
-        // Increase lambda substantially
         return lambda * four;
     }
 
     if ratio < min_ratio {
-        // Modest increase in lambda
         lambda * half.recip()
     } else if ratio > max_ratio {
-        // Decrease lambda
         let mut new_lambda = lambda * third;
-
-        // Ensure lambda doesn't become too small
         let min_lambda = T::from_f64(1e-10).unwrap();
         if new_lambda < min_lambda {
             new_lambda = min_lambda;
         }
-
         new_lambda
     } else {
-        // Keep lambda the same
         lambda
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{adjust_lambda, calculate_parameter_update, NormalEquations};
+    use super::{adjust_lambda, calculate_parameter_update, Linearization};
     use faer::Mat;
 
     #[test]
-    fn solves_the_damped_normal_system() {
+    fn solves_the_damped_least_squares_system() {
         let residuals = Mat::<f64>::from_fn(2, 1, |i, _| if i == 0 { -1.0 } else { -2.0 });
         let jacobian = Mat::<f64>::identity(2, 2);
         let diagonal = Mat::<f64>::ones(2, 1);
-        let normal = NormalEquations::new(&jacobian, &residuals);
+        let linearization = Linearization::new(&jacobian, &residuals);
 
-        let undamped = calculate_parameter_update(&normal, 0.0, &diagonal).unwrap();
+        let undamped = calculate_parameter_update(&jacobian, &residuals, &linearization, 0.0, &diagonal).unwrap();
         assert!((undamped.step[(0, 0)] - 1.0).abs() < 1e-12);
         assert!((undamped.step[(1, 0)] - 2.0).abs() < 1e-12);
         assert!((undamped.predicted_reduction - 2.5).abs() < 1e-12);
+        assert!(!undamped.used_svd_fallback);
 
-        let damped = calculate_parameter_update(&normal, 1.0, &diagonal).unwrap();
+        let damped = calculate_parameter_update(&jacobian, &residuals, &linearization, 1.0, &diagonal).unwrap();
         assert!((damped.step[(0, 0)] - 0.5).abs() < 1e-12);
         assert!((damped.step[(1, 0)] - 1.0).abs() < 1e-12);
         assert!((damped.predicted_reduction - 1.875).abs() < 1e-12);
     }
 
     #[test]
-    fn reports_a_singular_undamped_system() {
-        let residuals = Mat::<f64>::ones(1, 1);
-        let jacobian = Mat::<f64>::zeros(1, 1);
-        let diagonal = Mat::<f64>::ones(1, 1);
-        let normal = NormalEquations::new(&jacobian, &residuals);
+    fn rank_deficient_system_uses_minimum_norm_svd_step() {
+        let jacobian = Mat::<f64>::from_fn(1, 2, |_, _| 1.0);
+        let residuals = Mat::<f64>::from_fn(1, 1, |_, _| -2.0);
+        let diagonal = Mat::<f64>::ones(2, 1);
+        let linearization = Linearization::new(&jacobian, &residuals);
 
-        assert!(calculate_parameter_update(&normal, 0.0, &diagonal).is_err());
+        let update = calculate_parameter_update(&jacobian, &residuals, &linearization, 0.0, &diagonal).unwrap();
+
+        assert!(update.used_svd_fallback);
+        assert!((update.step[(0, 0)] - 1.0).abs() < 1e-12);
+        assert!((update.step[(1, 0)] - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn ill_conditioned_system_does_not_square_the_condition_number() {
+        let delta = 1e-10;
+        let jacobian = Mat::<f64>::from_fn(3, 2, |i, j| match (i, j) {
+            (_, 0) => 1.0,
+            (0, 1) => 1.0,
+            (1, 1) => 1.0 + delta,
+            (2, 1) => 1.0 - delta,
+            _ => unreachable!(),
+        });
+        let residuals = Mat::<f64>::from_fn(3, 1, |i, _| -(jacobian[(i, 0)] + 2.0 * jacobian[(i, 1)]));
+        let diagonal = Mat::<f64>::ones(2, 1);
+        let linearization = Linearization::new(&jacobian, &residuals);
+
+        let update = calculate_parameter_update(&jacobian, &residuals, &linearization, 0.0, &diagonal).unwrap();
+
+        assert!((update.step[(0, 0)] - 1.0).abs() < 1e-5, "{:?}", update.step);
+        assert!((update.step[(1, 0)] - 2.0).abs() < 1e-5, "{:?}", update.step);
     }
 
     #[test]

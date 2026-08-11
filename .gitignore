@@ -1,5 +1,6 @@
 /target/
-Cargo.lock
+/experiments/enzyme/target/
+/Cargo.lock
 
 # Reference implementations - not part of our project
 levenberg-marquardt/

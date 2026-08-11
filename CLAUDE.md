@@ -19,19 +19,18 @@ See `FAER.md` for the pinned faer API used by this repository.
   the problem supplies one and central finite differences otherwise.
 - `UserProvided`, `NumericalForward`, `NumericalCentral`, and
   `NumericalBackward` force a particular implemented strategy.
-- `AutoDiff` is reserved for a future Enzyme backend and currently returns
+- `AutoDiff` is reserved for a future stable Enzyme backend and currently returns
   `Error::AutoDiffUnavailable`. Never silently substitute finite differences
   while reporting autodiff.
 
-## Enzyme roadmap
+## Enzyme experiment
 
-Rust's `std::autodiff` integration is experimental and nightly-only. A real
-implementation must not differentiate through the current `dyn EraseTypes`
-path. Introduce a separate monomorphized, allocation-free residual interface
-using slices or faer views, then benchmark forward and reverse modes against
-analytical and numerical Jacobians. CI for that feature will need the rustup
-Enzyme component, release mode, and fat LTO. Do not add the old `enzyme` crate;
-it is an installation helper rather than the compiler backend.
+Rust's `std::autodiff` integration is experimental and nightly-only. The
+validated, pinned prototype lives in `experiments/enzyme` and is gated by a
+separate CI job. A library implementation must not differentiate through the
+current `dyn EraseTypes` path; use a monomorphized, allocation-free residual
+interface and benchmark it before adding a public feature. See
+`docs/AUTODIFF.md`.
 
 ## Build and validation
 
@@ -41,6 +40,7 @@ cargo test --all-targets
 cargo test --all-targets --all-features
 cargo clippy --all-targets --all-features -- -D warnings
 cargo doc --no-deps --all-features
+cargo bench --bench performance --no-run
 ```
 
 Run examples in release mode when inspecting solver behavior:
@@ -60,8 +60,8 @@ cargo run --release --example jacobian_methods
   kernels when faer provides the operation.
 - Check dimensions and finite values at every user-function boundary.
 - Rejected trust-region steps must never count as convergence.
-- Reuse residuals and normal-equation products while only the damping value
-  changes.
+- Reuse residuals, Jacobians, and linearization products while only the damping
+  value changes.
 - Keep optional integrations behind features so the core dependency graph
   stays small.
 - Add benchmarks before claiming a change is faster. Include warm-up,

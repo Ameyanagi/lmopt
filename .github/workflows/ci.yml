@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  quality:
+    name: Tests, lints, docs, and benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      - name: Check formatting
+        run: cargo +stable fmt --all -- --check
+      - name: Run Clippy
+        run: cargo +stable clippy --all-targets --all-features -- -D warnings
+      - name: Run tests
+        run: cargo +stable test --all-targets --all-features
+      - name: Run documentation tests
+        run: cargo +stable test --doc --all-features
+      - name: Build documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo +stable doc --no-deps --all-features
+      - name: Build benchmark harness
+        run: cargo +stable bench --bench performance --no-run
+
+  features:
+    name: Feature combinations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+      - run: cargo +stable check --no-default-features
+      - run: cargo +stable check --no-default-features --features ndarray
+      - run: cargo +stable check --no-default-features --features nalgebra
+      - run: cargo +stable check --all-features
+
+  msrv:
+    name: Rust 1.85 minimum version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install MSRV
+        run: rustup toolchain install 1.85.0 --profile minimal
+      - name: Check core library on MSRV
+        run: cargo +1.85.0 check --lib --no-default-features
+
+  enzyme-experiment:
+    name: Enzyme nightly experiment
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install pinned nightly with Enzyme
+        run: rustup toolchain install nightly-2026-08-11 --profile minimal --component enzyme
+      - name: Validate generated Rosenbrock Jacobian
+        env:
+          RUSTFLAGS: -Zautodiff=Enable
+        run: cargo +nightly-2026-08-11 run --locked --release --manifest-path experiments/enzyme/Cargo.toml
+      - name: Build Enzyme benchmark harness
+        env:
+          RUSTFLAGS: -Zautodiff=Enable
+        run: cargo +nightly-2026-08-11 bench --locked --manifest-path experiments/enzyme/Cargo.toml --bench jacobian --no-run

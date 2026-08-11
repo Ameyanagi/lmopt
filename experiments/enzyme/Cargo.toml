@@ -1,0 +1,16 @@
+[package]
+name = "lmopt-enzyme-experiment"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dev-dependencies]
+criterion = { version = "0.7.0", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "jacobian"
+harness = false
+
+[profile.release]
+lto = "fat"
+codegen-units = 1

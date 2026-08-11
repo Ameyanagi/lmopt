@@ -1,6 +1,6 @@
 use super::{
     convergence::check_convergence,
-    trust_region::{adjust_lambda, calculate_parameter_update, NormalEquations},
+    trust_region::{adjust_lambda, calculate_parameter_update, Linearization},
 };
 use crate::lm::{LevenbergMarquardt, MinimizationReport, TerminationReason};
 use crate::{utils::jacobian::get_jacobian_calculator, Error, LeastSquaresProblem, Result};
@@ -175,6 +175,7 @@ impl LevenbergMarquardt {
                 accepted_steps: 0,
                 rejected_steps: 0,
                 final_lambda: T::zero(),
+                svd_fallbacks: 0,
             });
         }
 
@@ -185,7 +186,7 @@ impl LevenbergMarquardt {
         let calculator = get_jacobian_calculator(self.jacobian_method, self.numerical_diff_step_size);
         let mut jacobian = calculator.calculate_jacobian_with_residuals(&problem, &params, &residuals)?;
         validate_jacobian(&jacobian, m_residuals, n_params)?;
-        let mut normal = NormalEquations::new(&jacobian, &residuals);
+        let mut linearization = Linearization::new(&jacobian, &residuals);
 
         // Scale the diagonal based on the Jacobian if needed
         // Use the column norms of the Jacobian to scale the parameters
@@ -218,6 +219,7 @@ impl LevenbergMarquardt {
         let mut jacobian_is_current = true;
         let mut accepted_steps = 0;
         let mut rejected_steps = 0;
+        let mut svd_fallbacks = 0;
 
         while iterations < max_iterations {
             iterations += 1;
@@ -225,7 +227,8 @@ impl LevenbergMarquardt {
             let old_residuals_norm = residuals_norm;
 
             // Solve the trust region subproblem
-            let update = calculate_parameter_update(&normal, lambda, &diag)?;
+            let update = calculate_parameter_update(&jacobian, &residuals, &linearization, lambda, &diag)?;
+            svd_fallbacks += usize::from(update.used_svd_fallback);
 
             validate_vector(&update.step, "Parameter update", Some(n_params))?;
             if !Float::is_finite(update.predicted_reduction) {
@@ -304,7 +307,7 @@ impl LevenbergMarquardt {
                 // step. Rejected damping attempts reuse the existing one.
                 jacobian = calculator.calculate_jacobian_with_residuals(&problem, &params, &residuals)?;
                 validate_jacobian(&jacobian, m_residuals, n_params)?;
-                normal = NormalEquations::new(&jacobian, &residuals);
+                linearization = Linearization::new(&jacobian, &residuals);
                 jacobian_is_current = true;
             } else {
                 rejected_steps += 1;
@@ -335,6 +338,7 @@ impl LevenbergMarquardt {
             accepted_steps,
             rejected_steps,
             final_lambda: lambda,
+            svd_fallbacks,
         })
     }
 }
