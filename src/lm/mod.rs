@@ -22,9 +22,6 @@ use std::ops::AddAssign;
 ///   the `jacobian()` method in the `LeastSquaresProblem` trait. This is
 ///   usually the fastest and most accurate approach.
 ///
-/// - `AutoDiff`: Reserve automatic differentiation explicitly. Until the
-///   Enzyme backend is implemented, selecting it returns an error.
-///
 /// - `NumericalCentral`: Use central difference approximation:
 ///   `(f(x+h) - f(x-h)) / (2*h)`. This is more accurate than forward or
 ///   backward differences but requires twice as many function evaluations.
@@ -51,8 +48,6 @@ pub enum JacobianMethod {
     Auto,
     /// Use the user-provided Jacobian function.
     UserProvided,
-    /// Request automatic differentiation. Currently returns an unavailable error.
-    AutoDiff,
     /// Use numerical differentiation with central differences.
     NumericalCentral,
     /// Use numerical differentiation with forward differences.

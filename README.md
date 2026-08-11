@@ -260,20 +260,6 @@ output is intended for diagnostics, not benchmarking. The first measured
 baseline and reproduction command are recorded in
 [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
 
-## Automatic Differentiation Status
-
-An Enzyme-backed implementation is not currently shipped. Selecting
-`JacobianMethod::AutoDiff` returns `Error::AutoDiffUnavailable`; it never
-silently substitutes numerical differentiation. `JacobianMethod::Auto` is the
-recommended default today.
-
-The isolated nightly prototype in `experiments/enzyme` now generates and checks
-a Rosenbrock Jacobian using `std::autodiff`. See
-[`docs/AUTODIFF.md`](docs/AUTODIFF.md) for its pinned toolchain, validation
-command, limitations, and integration criteria. It remains separate from the
-stable API until its compiler and performance constraints are suitable for
-library users.
-
 ## Upgrading
 
 Version 0.2 changes error handling, Jacobian defaults, diagnostics, and minimum

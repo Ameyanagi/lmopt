@@ -10,6 +10,7 @@ repository = "https://github.com/Ameyanagi/lmopt"
 readme = "README.md"
 keywords = ["optimization", "levenberg-marquardt", "numeric", "fitting", "least-squares"]
 categories = ["algorithms", "mathematics", "science"]
+exclude = ["experiments/"]
 
 [dependencies]
 # Linear algebra

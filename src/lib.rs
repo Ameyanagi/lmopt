@@ -73,9 +73,6 @@
 //!    - Forward differences: `(f(x+h) - f(x)) / h`
 //!    - Central differences: `(f(x+h) - f(x-h)) / (2*h)` (more accurate)
 //!    - Backward differences: `(f(x) - f(x-h)) / h`
-//! 4. **Automatic Differentiation**: Reserved for a future stable Enzyme backend;
-//!    requesting it currently returns [`Error::AutoDiffUnavailable`].
-//!
 //! ## Performance Considerations
 //!
 //! For optimal performance:

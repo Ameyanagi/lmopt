@@ -1,0 +1,8 @@
+[package]
+name = "lmopt-cubecl-experiment"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+cubecl = { version = "=0.10.0", default-features = false, features = ["wgpu"] }

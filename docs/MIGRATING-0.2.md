@@ -18,10 +18,6 @@ The default is `JacobianMethod::Auto`: it uses an analytical Jacobian when the
 problem supplies one and central finite differences otherwise. Select
 `UserProvided` when a missing analytical Jacobian should be an error.
 
-`JacobianMethod::AutoDiff` now returns `Error::AutoDiffUnavailable`; it no
-longer reports finite differences as autodiff. The validated Enzyme experiment
-is intentionally outside the stable API.
-
 ## Reports
 
 `MinimizationReport` adds:
@@ -39,6 +35,5 @@ only consume reports and require no change.
 The `ndarray` and `nalgebra` conversions now require their corresponding crate
 features. The core crate has neither enabled by default.
 
-The minimum supported Rust version is 1.85. The main optimizer and every stable
-feature remain compatible with stable Rust; only `experiments/enzyme` uses a
-pinned nightly toolchain.
+The minimum supported Rust version is 1.85. The optimizer and every feature
+remain compatible with stable Rust.

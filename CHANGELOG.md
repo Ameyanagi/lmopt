@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- An isolated CubeCL/WGPU feasibility benchmark for GPU residual and
+  analytical-Jacobian evaluation.
+
+### Removed
+
+- The experimental Enzyme crate and the unavailable `AutoDiff` API surface.
+
 ## [0.2.0] - 2026-08-11
 
 ### Added
@@ -19,9 +28,7 @@ All notable changes to this project are documented here. The format follows
 - Generated and adversarial regression coverage for exact, noisy,
   underdetermined, ill-conditioned, and one-sided-domain problems.
 - CI gates for formatting, Clippy, tests, documentation, feature combinations,
-  Rust 1.85, benchmark compilation, and the pinned nightly Enzyme experiment.
-- An isolated `std::autodiff` prototype that validates an Enzyme-generated
-  Rosenbrock Jacobian.
+  Rust 1.85, and benchmark compilation.
 
 ### Changed
 
@@ -36,8 +43,6 @@ All notable changes to this project are documented here. The format follows
 
 ### Removed
 
-- The `enzyme` install-helper dependency and the finite-difference code that
-  was previously presented as automatic differentiation.
 - Unsafe type-name-based matrix conversion dispatch.
 - Unused unconditional dependencies and inaccessible duplicate test modules.
 

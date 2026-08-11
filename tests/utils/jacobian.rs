@@ -112,19 +112,6 @@ fn test_numerical_forward_jacobian() {
 }
 
 #[test]
-fn test_autodiff_is_explicitly_unavailable() {
-    let problem = LinearProblem;
-    let params = Mat::from_fn(2, 1, |_, _| 1.0);
-
-    // Never silently label finite differences as automatic differentiation.
-    let calculator = get_jacobian_calculator::<f64>(JacobianMethod::AutoDiff, 1e-6);
-    let error = calculator.calculate_jacobian(&problem, &params).unwrap_err();
-
-    assert!(error.to_string().contains("unavailable"));
-    assert_eq!(calculator.method_used(), JacobianMethod::AutoDiff);
-}
-
-#[test]
 fn test_auto_prefers_the_analytical_jacobian() {
     let problem = LinearProblem;
     let params = Mat::from_fn(2, 1, |_, _| 1.0);

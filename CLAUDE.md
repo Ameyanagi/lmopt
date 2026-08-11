@@ -19,18 +19,6 @@ See `FAER.md` for the pinned faer API used by this repository.
   the problem supplies one and central finite differences otherwise.
 - `UserProvided`, `NumericalForward`, `NumericalCentral`, and
   `NumericalBackward` force a particular implemented strategy.
-- `AutoDiff` is reserved for a future stable Enzyme backend and currently returns
-  `Error::AutoDiffUnavailable`. Never silently substitute finite differences
-  while reporting autodiff.
-
-## Enzyme experiment
-
-Rust's `std::autodiff` integration is experimental and nightly-only. The
-validated, pinned prototype lives in `experiments/enzyme` and is gated by a
-separate CI job. A library implementation must not differentiate through the
-current `dyn EraseTypes` path; use a monomorphized, allocation-free residual
-interface and benchmark it before adding a public feature. See
-`docs/AUTODIFF.md`.
 
 ## Build and validation
 

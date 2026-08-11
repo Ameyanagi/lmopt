@@ -12,19 +12,6 @@ for detecting large regressions rather than small percentage changes.
 | Central finite differences | 118.37 µs | 1.96 ms |
 | End-to-end analytical optimization | 29.72 µs | 391.11 µs |
 
-The isolated nightly experiment also measured the static 2×2 Rosenbrock
-Jacobian:
-
-| Method | Time |
-| --- | ---: |
-| Hand-written analytical | 0.99 ns |
-| Enzyme forward mode | 0.97 ns |
-| Central finite differences | 1.99 ns |
-
-These sub-nanosecond-scale results are a compiler microbenchmark. They show
-that Enzyme can remove finite-difference overhead for a monomorphic kernel, but
-they should not be extrapolated to dynamically sized end-to-end solves.
-
 Reproduce the short baseline with:
 
 ```text
@@ -35,3 +22,11 @@ cargo bench --bench performance -- \
 For decisions involving small differences, run the default Criterion duration
 on an otherwise idle machine and compare Criterion result directories from the
 same host. Do not compare raw timings across different machines.
+
+## GPU feasibility
+
+The isolated `experiments/cubecl` program compares CPU and CubeCL/WGPU
+residual-plus-Jacobian evaluation over a much larger size range. Its README
+records the Apple M4 results and the important limitation: it benchmarks only
+the stage CubeCL can currently provide, not the complete optimizer or its
+pivoted-QR/SVD linear solve.

@@ -26,10 +26,6 @@ pub enum Error {
     /// No convergence achieved
     #[error("No convergence: {0}")]
     NoConvergence(String),
-
-    /// Automatic differentiation was requested but no backend is available.
-    #[error("Automatic differentiation is unavailable: {0}")]
-    AutoDiffUnavailable(String),
 }
 
 /// Result type for lmopt operations

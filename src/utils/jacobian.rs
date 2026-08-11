@@ -143,22 +143,6 @@ impl<T: RealField + Copy + Float + FromPrimitive> JacobianCalculator<T> for Auto
     }
 }
 
-/// Placeholder that fails explicitly rather than silently performing finite
-/// differences while claiming they came from automatic differentiation.
-pub struct UnavailableAutoDiff;
-
-impl<T: RealField + Copy> JacobianCalculator<T> for UnavailableAutoDiff {
-    fn calculate_jacobian(&self, _problem: &dyn EraseTypes<T>, _parameters: &Mat<T>) -> Result<Mat<T>> {
-        Err(Error::AutoDiffUnavailable(
-            "the Enzyme-backed implementation is not yet available; use JacobianMethod::Auto, provide an analytical Jacobian, or choose a numerical method".to_string(),
-        ))
-    }
-
-    fn method_used(&self) -> JacobianMethod {
-        JacobianMethod::AutoDiff
-    }
-}
-
 // Factory function to create appropriate JacobianCalculator based on method
 pub fn get_jacobian_calculator<T: RealField + Copy + Float + FromPrimitive + 'static>(method: JacobianMethod, step_size: f64) -> Box<dyn JacobianCalculator<T>> {
     match method {
@@ -167,6 +151,5 @@ pub fn get_jacobian_calculator<T: RealField + Copy + Float + FromPrimitive + 'st
         JacobianMethod::NumericalCentral => Box::new(NumericalJacobian::new(FiniteDifferenceMethod::Central, step_size)),
         JacobianMethod::NumericalForward => Box::new(NumericalJacobian::new(FiniteDifferenceMethod::Forward, step_size)),
         JacobianMethod::NumericalBackward => Box::new(NumericalJacobian::new(FiniteDifferenceMethod::Backward, step_size)),
-        JacobianMethod::AutoDiff => Box::new(UnavailableAutoDiff),
     }
 }
