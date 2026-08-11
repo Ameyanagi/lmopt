@@ -6,11 +6,6 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Added
-
-- An isolated CubeCL/WGPU feasibility benchmark for GPU residual and
-  analytical-Jacobian evaluation.
-
 ### Removed
 
 - The experimental Enzyme crate and the unavailable `AutoDiff` API surface.

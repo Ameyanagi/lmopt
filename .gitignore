@@ -1,5 +1,4 @@
 /target/
-/experiments/cubecl/target/
 /Cargo.lock
 
 # Reference implementations - not part of our project

@@ -22,11 +22,3 @@ cargo bench --bench performance -- \
 For decisions involving small differences, run the default Criterion duration
 on an otherwise idle machine and compare Criterion result directories from the
 same host. Do not compare raw timings across different machines.
-
-## GPU feasibility
-
-The isolated `experiments/cubecl` program compares CPU and CubeCL/WGPU
-residual-plus-Jacobian evaluation over a much larger size range. Its README
-records the Apple M4 results and the important limitation: it benchmarks only
-the stage CubeCL can currently provide, not the complete optimizer or its
-pivoted-QR/SVD linear solve.
