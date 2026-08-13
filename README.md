@@ -3,12 +3,14 @@
 [![Rust](https://img.shields.io/badge/language-Rust-orange.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)]()
 
-A high-performance Rust implementation of the Levenberg-Marquardt algorithm for nonlinear least squares optimization, using the [faer](https://github.com/sarah-ek/faer-rs) linear algebra library.
+A robust Rust implementation of the Levenberg-Marquardt algorithm for dense
+nonlinear least-squares optimization, using
+[faer](https://github.com/sarah-ek/faer-rs) for linear algebra.
 
 ## Features
 
 - **Powerful Optimizer**: Robust implementation of the Levenberg-Marquardt algorithm with trust region strategy
-- **High Performance**: Built on the highly optimized `faer` library for efficient matrix operations
+- **Measured Performance**: Criterion baselines cover Jacobian construction and end-to-end solves
 - **Robust Linear Solves**: Damped least squares uses column-pivoted QR with a truncated-SVD fallback for rank-deficient systems
 - **Multiple Jacobian Methods**:
   - Automatic selection of the best available implemented method
@@ -21,78 +23,27 @@ A high-performance Rust implementation of the Levenberg-Marquardt algorithm for 
 ## Quick Start
 
 ```rust
-use lmopt::{LeastSquaresProblem, LevenbergMarquardt, JacobianMethod, Result};
-use faer::Col;
-
-// Define a least squares problem: fitting a line y = a*x + b
-struct LinearModel {
-    x_data: Vec<f64>,
-    y_data: Vec<f64>,
-}
-
-impl LeastSquaresProblem<f64> for LinearModel {
-    fn residuals(&self, parameters: &faer::Mat<f64>) -> Result<faer::Mat<f64>> {
-        let a = parameters[(0, 0)];
-        let b = parameters[(1, 0)];
-        
-        let n = self.x_data.len();
-        let mut residuals = faer::Mat::zeros(n, 1);
-        
-        for i in 0..n {
-            let x = self.x_data[i];
-            let y = self.y_data[i];
-            let predicted = a * x + b;
-            // residual = predicted - observed
-            residuals[(i, 0)] = predicted - y;
-        }
-        
-        Ok(residuals)
-    }
-    
-    fn jacobian(&self, _parameters: &faer::Mat<f64>) -> Option<faer::Mat<f64>> {
-        let n = self.x_data.len();
-        let mut jacobian = faer::Mat::zeros(n, 2);
-        
-        for i in 0..n {
-            let x = self.x_data[i];
-            // ∂r_i/∂a = x_i
-            jacobian[(i, 0)] = x;
-            // ∂r_i/∂b = 1
-            jacobian[(i, 1)] = 1.0;
-        }
-        
-        Some(jacobian)
-    }
-}
+use anyhow::{Context, Result};
+use lmopt::least_squares;
 
 fn main() -> Result<()> {
-    // Create sample data for y = 2x + 3 with some noise
-    let x_data = vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0];
-    let y_data = vec![3.1, 5.2, 6.9, 9.1, 11.0, 13.1];
-    
-    let problem = LinearModel { x_data, y_data };
-    
-    // Initial guess for parameters
-    let initial_guess = Col::from_vec(vec![1.0, 1.0]);
-    
-    // Create optimizer with custom settings
-    let optimizer = LevenbergMarquardt::new()
-        .with_max_iterations(100)
-        .with_ftol(1e-8)
-        .with_xtol(1e-8)
-        .with_jacobian_method(JacobianMethod::UserProvided);
-    
-    // Solve the optimization problem
-    let result = optimizer.minimize(&problem, &initial_guess)?;
-    
-    // Extract the optimized parameters
-    let a = result.solution_params[(0, 0)];
-    let b = result.solution_params[(1, 0)];
-    
-    println!("Fitted line: y = {:.4}*x + {:.4}", a, b);
-    println!("Iterations: {}", result.iterations);
-    println!("Final objective value: {:.6e}", result.objective_function);
-    
+    let xs = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0];
+    let ys = [3.1, 5.2, 6.9, 9.1, 11.0, 13.1];
+
+    // Fit y = slope * x + intercept, starting from [1, 1].
+    let fit = least_squares(&[1.0, 1.0], |parameters| {
+        let [slope, intercept] = parameters else { return Vec::new() };
+        xs.iter()
+            .zip(ys)
+            .map(|(x, y)| slope * x + intercept - y)
+            .collect()
+    })
+    .context("failed to fit the line")?;
+
+    let parameters = fit.parameters();
+    println!("Fitted line: y = {:.4}*x + {:.4}", parameters[0], parameters[1]);
+    println!("Iterations: {}", fit.iterations);
+    println!("Final objective value: {:.6e}", fit.objective_function);
     Ok(())
 }
 ```
@@ -103,25 +54,30 @@ Add `lmopt` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-lmopt = "0.2.0"
-faer = "0.22.6"  # Required dependency
+lmopt = "0.3.0"
+anyhow = "1"
 ```
 
 Enable only the interoperability you need:
 
 ```toml
 [dependencies]
-lmopt = { version = "0.2.0", features = ["ndarray", "nalgebra"] }
+lmopt = { version = "0.3.0", features = ["ndarray", "nalgebra"] }
+```
+
+The advanced matrix API also requires a direct `faer` dependency so its types
+can be named in your code. Avoid enabling unrelated faer defaults:
+
+```toml
+[dependencies]
+lmopt = "0.3.0"
+faer = { version = "0.22.6", default-features = false, features = ["std"] }
 ```
 
 ## Requirements
 
 - Rust 1.85 or newer
-- Dependencies:
-  - faer = "0.22.6"
-  - ndarray = "0.16.1" (optional interoperability feature)
-  - nalgebra = "0.33.2" (optional interoperability feature)
-  - thiserror = "2.0.12"
+- `ndarray` and `nalgebra` support are optional features
 
 ## Documentation
 
@@ -129,9 +85,10 @@ For detailed documentation and more examples, see the [API Documentation](https:
 
 ## Usage Guide
 
-### Defining a Problem
+### Advanced problem API
 
-To use the Levenberg-Marquardt algorithm, you need to define your least squares problem by implementing the `LeastSquaresProblem` trait:
+Use `LevenbergMarquardt` and `LeastSquaresProblem` when you need an analytical
+Jacobian, non-`f64` scalars, or detailed configuration:
 
 ```rust
 impl LeastSquaresProblem<f64> for MyProblem {
@@ -182,8 +139,9 @@ let optimizer = LevenbergMarquardt::new()
     .with_max_iterations(200)
     
     // Set convergence tolerances
-    .with_ftol(1e-8) // Relative reduction in residual norm
-    .with_xtol(1e-8) // Relative parameter-step tolerance
+    .with_ftol(1e-8) // Relative objective-reduction tolerance
+    .with_xtol(1e-8) // Relative scaled-parameter-step tolerance
+    .with_gtol(1e-8) // Scaled-gradient tolerance
     
     // Set initial damping parameter
     .with_tau(1e-3)
@@ -191,7 +149,7 @@ let optimizer = LevenbergMarquardt::new()
     // Choose Jacobian calculation method
     .with_jacobian_method(JacobianMethod::NumericalCentral)
     
-    // Set step size for numerical differentiation
+    // Override the precision-aware default finite-difference step
     .with_numerical_diff_step_size(1e-6);
 ```
 
@@ -200,27 +158,16 @@ let optimizer = LevenbergMarquardt::new()
 The `MinimizationReport` struct provides detailed information about the optimization:
 
 ```rust
+// `minimize` returns NoConvergence instead of an apparently successful Result.
 let result = optimizer.minimize(&problem, &initial_guess)?;
+println!("Solution parameters: {:?}", result.parameters());
+println!("Final objective value: {}", result.objective_function);
+println!("Accepted/rejected steps: {}/{}", result.accepted_steps, result.rejected_steps);
+println!("Residual/Jacobian evaluations: {}/{}", result.residual_evaluations, result.jacobian_evaluations);
 
-// Check if the optimization was successful
-if result.success {
-    // Access the solution
-    println!("Solution parameters: {:?}", result.solution_params);
-    println!("Final objective value: {}", result.objective_function);
-    println!("Residuals: {:?}", result.residuals);
-    
-    // Performance information
-    println!("Iterations: {}", result.iterations);
-    println!("Accepted/rejected steps: {}/{}", result.accepted_steps, result.rejected_steps);
-    println!("Residual evaluations: {}", result.residual_evaluations);
-    println!("Jacobian evaluations: {}", result.jacobian_evaluations);
-    println!("Execution time: {:?}", result.execution_time);
-    println!("Jacobian method used: {:?}", result.jacobian_method_used);
-    println!("SVD fallbacks: {}", result.svd_fallbacks);
-} else {
-    // Analyze why optimization failed
-    println!("Optimization failed: {:?}", result.termination_reason);
-}
+// Use `optimize` when a partial report at the iteration limit is useful.
+let report = optimizer.optimize(&problem, &initial_guess)?;
+println!("Converged: {} ({:?})", report.converged(), report.termination_reason);
 ```
 
 ## Examples
@@ -262,8 +209,8 @@ baseline and reproduction command are recorded in
 
 ## Upgrading
 
-Version 0.2 changes error handling, Jacobian defaults, diagnostics, and minimum
-Rust version. See [`docs/MIGRATING-0.2.md`](docs/MIGRATING-0.2.md) and
+Version 0.3 adds the closure API and changes convergence and non-convergence
+handling. See [`docs/MIGRATING-0.3.md`](docs/MIGRATING-0.3.md) and
 [`CHANGELOG.md`](CHANGELOG.md).
 
 ## License

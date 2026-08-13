@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result as TestResult};
 use faer::Mat;
 use lmopt::utils::finite_difference::{calculate_jacobian, FiniteDifferenceMethod};
 use lmopt::{LeastSquaresProblem, Result};
@@ -41,13 +42,13 @@ impl LeastSquaresProblem<f64> for QuadraticProblem {
 }
 
 #[test]
-fn test_forward_difference() {
+fn test_forward_difference() -> TestResult<()> {
     let problem = QuadraticProblem;
     let params = Mat::from_fn(2, 1, |i, _| if i == 0 { 2.0 } else { 3.0 });
 
     let step_size = 1e-6;
-    let numerical_jacobian = calculate_jacobian(&problem, &params, step_size, FiniteDifferenceMethod::Forward).unwrap();
-    let analytical_jacobian = problem.jacobian(&params).unwrap();
+    let numerical_jacobian = calculate_jacobian(&problem, &params, step_size, FiniteDifferenceMethod::Forward)?;
+    let analytical_jacobian = problem.jacobian(&params).ok_or_else(|| anyhow!("analytical Jacobian is missing"))?;
 
     // Check that numerical approximation is close to analytical
     for i in 0..3 {
@@ -56,16 +57,17 @@ fn test_forward_difference() {
             assert!(rel_error < 1e-5, "Forward difference rel error too large at ({}, {}): {}", i, j, rel_error);
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_central_difference() {
+fn test_central_difference() -> TestResult<()> {
     let problem = QuadraticProblem;
     let params = Mat::from_fn(2, 1, |i, _| if i == 0 { 2.0 } else { 3.0 });
 
     let step_size = 1e-6;
-    let numerical_jacobian = calculate_jacobian(&problem, &params, step_size, FiniteDifferenceMethod::Central).unwrap();
-    let analytical_jacobian = problem.jacobian(&params).unwrap();
+    let numerical_jacobian = calculate_jacobian(&problem, &params, step_size, FiniteDifferenceMethod::Central)?;
+    let analytical_jacobian = problem.jacobian(&params).ok_or_else(|| anyhow!("analytical Jacobian is missing"))?;
 
     // Central difference should be more accurate than forward difference
     for i in 0..3 {
@@ -74,16 +76,17 @@ fn test_central_difference() {
             assert!(rel_error < 1e-8, "Central difference rel error too large at ({}, {}): {}", i, j, rel_error);
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_backward_difference() {
+fn test_backward_difference() -> TestResult<()> {
     let problem = QuadraticProblem;
     let params = Mat::from_fn(2, 1, |i, _| if i == 0 { 2.0 } else { 3.0 });
 
     let step_size = 1e-6;
-    let numerical_jacobian = calculate_jacobian(&problem, &params, step_size, FiniteDifferenceMethod::Backward).unwrap();
-    let analytical_jacobian = problem.jacobian(&params).unwrap();
+    let numerical_jacobian = calculate_jacobian(&problem, &params, step_size, FiniteDifferenceMethod::Backward)?;
+    let analytical_jacobian = problem.jacobian(&params).ok_or_else(|| anyhow!("analytical Jacobian is missing"))?;
 
     // Check that numerical approximation is close to analytical
     for i in 0..3 {
@@ -92,6 +95,7 @@ fn test_backward_difference() {
             assert!(rel_error < 1e-5, "Backward difference rel error too large at ({}, {}): {}", i, j, rel_error);
         }
     }
+    Ok(())
 }
 
 struct ChangingResidualShape;
@@ -104,15 +108,23 @@ impl LeastSquaresProblem<f64> for ChangingResidualShape {
 }
 
 #[test]
-fn changing_residual_shape_returns_an_error() {
-    let error = calculate_jacobian(&ChangingResidualShape, &Mat::zeros(1, 1), 1e-6, FiniteDifferenceMethod::Forward).unwrap_err();
+fn changing_residual_shape_returns_an_error() -> TestResult<()> {
+    let error = match calculate_jacobian(&ChangingResidualShape, &Mat::zeros(1, 1), 1e-6, FiniteDifferenceMethod::Forward) {
+        Ok(_) => return Err(anyhow!("changing residual shape unexpectedly succeeded")),
+        Err(error) => error,
+    };
 
     assert!(error.to_string().contains("dimensions changed"));
+    Ok(())
 }
 
 #[test]
-fn invalid_step_size_returns_an_error() {
-    let error = calculate_jacobian(&QuadraticProblem, &Mat::ones(2, 1), 0.0, FiniteDifferenceMethod::Central).unwrap_err();
+fn invalid_step_size_returns_an_error() -> TestResult<()> {
+    let error = match calculate_jacobian(&QuadraticProblem, &Mat::ones(2, 1), 0.0, FiniteDifferenceMethod::Central) {
+        Ok(_) => return Err(anyhow!("invalid step size unexpectedly succeeded")),
+        Err(error) => error,
+    };
 
     assert!(error.to_string().contains("step size"));
+    Ok(())
 }

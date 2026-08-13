@@ -6,9 +6,39 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - Unreleased
+
+### Added
+
+- A closure-first API: `least_squares`, `try_least_squares`, and matching
+  optimizer methods accept plain parameter slices and residual vectors.
+- A scaled-gradient convergence criterion and precision-aware defaults for
+  `f32` and `f64`.
+- An external-consumer compile check for the README quick start and a
+  retry-heavy optimizer benchmark.
+
+### Changed
+
+- Made trust-region damping and convergence checks invariant to uniform
+  residual scaling, including very large and very small scales.
+- Made `minimize` return `Error::NoConvergence` for unsuccessful termination;
+  `optimize` retains access to partial reports.
+- Accepted faer column vectors and other `AsMatRef` inputs directly, and added
+  `MinimizationReport::parameters` for allocation-free slice output.
+- Reused the augmented linear-system workspace across rejected trust-region
+  trials.
+- Replaced ambiguous epsilon settings with `ftol`, `xtol`, and `gtol` while
+  retaining deprecated aliases.
+- Made `MinimizationReport` non-exhaustive so diagnostics can evolve without
+  breaking downstream destructuring.
+- Enforced safe Rust in the library. Library failures use `thiserror`; examples
+  and tests use `anyhow` at application boundaries instead of unchecked value
+  extraction.
+
 ### Removed
 
 - The experimental Enzyme crate and the unavailable `AutoDiff` API surface.
+- The empty `minpack-compat` feature.
 
 ## [0.2.0] - 2026-08-11
 
@@ -41,5 +71,6 @@ All notable changes to this project are documented here. The format follows
 - Unsafe type-name-based matrix conversion dispatch.
 - Unused unconditional dependencies and inaccessible duplicate test modules.
 
-[Unreleased]: https://github.com/Ameyanagi/lmopt/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Ameyanagi/lmopt/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Ameyanagi/lmopt/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Ameyanagi/lmopt/compare/04003d1...v0.2.0

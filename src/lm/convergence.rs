@@ -2,20 +2,22 @@ use crate::lm::TerminationReason;
 use faer_traits::RealField;
 
 /// Check if the algorithm has converged based on various criteria
-pub(crate) fn check_convergence<T>(old_residuals_norm: T, new_residuals_norm: T, step_norm: T, params_norm: T, epsilon_1: T, epsilon_2: T) -> Option<TerminationReason>
+pub(crate) fn check_convergence<T>(old_objective: T, new_objective: T, scaled_step_norm: T, scaled_params_norm: T, ftol: T, xtol: T) -> Option<TerminationReason>
 where
     T: RealField + Copy,
 {
     // A worsening trial point must never be interpreted as convergence.
-    if old_residuals_norm > T::zero() && new_residuals_norm <= old_residuals_norm {
-        let relative_reduction = (old_residuals_norm - new_residuals_norm) / old_residuals_norm;
-        if relative_reduction <= epsilon_1 {
+    if old_objective > T::zero() && new_objective <= old_objective {
+        let relative_reduction = (old_objective - new_objective) / old_objective;
+        if relative_reduction <= ftol {
             return Some(TerminationReason::SmallRelativeReduction);
         }
     }
 
-    // Include an absolute component so a solution near the origin can converge.
-    if step_norm <= epsilon_2 * (params_norm + epsilon_2) {
+    // Keep this purely relative. An absolute floor in scaled coordinates makes
+    // convergence depend on the arbitrary scale of the residuals/Jacobian.
+    // Stationary solutions at the origin are handled by the gradient test.
+    if scaled_params_norm > T::zero() && scaled_step_norm <= xtol * scaled_params_norm {
         return Some(TerminationReason::SmallParameters);
     }
 
@@ -32,8 +34,8 @@ mod tests {
     }
 
     #[test]
-    fn a_small_step_at_the_origin_can_converge() {
-        assert!(check_convergence(1.0, 0.5, 1e-20, 0.0, 1e-8, 1e-8).is_some());
+    fn a_small_step_at_the_origin_needs_the_gradient_test() {
+        assert!(check_convergence(1.0, 0.5, 1e-20, 0.0, 1e-8, 1e-8).is_none());
     }
 
     #[test]

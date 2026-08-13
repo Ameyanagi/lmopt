@@ -1,15 +1,16 @@
+use anyhow::Result as TestResult;
 use faer::Mat;
 use lmopt::utils::matrix_convert::{FromFaer, IntoFaer};
 use nalgebra::{DMatrix, DVector};
 use ndarray::{Array1, Array2};
 
 #[test]
-fn test_ndarray_to_faer_conversion() {
+fn test_ndarray_to_faer_conversion() -> TestResult<()> {
     // Create an ndarray matrix
-    let arr = Array2::from_shape_vec((2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+    let arr = Array2::from_shape_vec((2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])?;
 
     // Convert to faer
-    let faer_mat = (&arr).into_faer().unwrap();
+    let faer_mat = (&arr).into_faer()?;
 
     // Check dimensions
     assert_eq!(faer_mat.nrows(), 2);
@@ -21,15 +22,16 @@ fn test_ndarray_to_faer_conversion() {
             assert_eq!(faer_mat[(i, j)], arr[[i, j]]);
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_ndarray_vector_to_faer_conversion() {
+fn test_ndarray_vector_to_faer_conversion() -> TestResult<()> {
     // Create an ndarray vector
     let arr = Array1::from_vec(vec![1.0, 2.0, 3.0]);
 
     // Convert to faer
-    let faer_mat = (&arr).into_faer().unwrap();
+    let faer_mat = (&arr).into_faer()?;
 
     // Check dimensions
     assert_eq!(faer_mat.nrows(), 3);
@@ -39,15 +41,16 @@ fn test_ndarray_vector_to_faer_conversion() {
     for i in 0..3 {
         assert_eq!(faer_mat[(i, 0)], arr[i]);
     }
+    Ok(())
 }
 
 #[test]
-fn test_nalgebra_to_faer_conversion() {
+fn test_nalgebra_to_faer_conversion() -> TestResult<()> {
     // Create a nalgebra matrix
     let mat = DMatrix::from_row_slice(2, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
 
     // Convert to faer
-    let faer_mat = (&mat).into_faer().unwrap();
+    let faer_mat = (&mat).into_faer()?;
 
     // Check dimensions
     assert_eq!(faer_mat.nrows(), 2);
@@ -59,15 +62,16 @@ fn test_nalgebra_to_faer_conversion() {
             assert_eq!(faer_mat[(i, j)], mat[(i, j)]);
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_nalgebra_vector_to_faer_conversion() {
+fn test_nalgebra_vector_to_faer_conversion() -> TestResult<()> {
     // Create a nalgebra vector
     let vec = DVector::from_column_slice(&[1.0, 2.0, 3.0]);
 
     // Convert to faer
-    let faer_mat = (&vec).into_faer().unwrap();
+    let faer_mat = (&vec).into_faer()?;
 
     // Check dimensions
     assert_eq!(faer_mat.nrows(), 3);
@@ -77,10 +81,11 @@ fn test_nalgebra_vector_to_faer_conversion() {
     for i in 0..3 {
         assert_eq!(faer_mat[(i, 0)], vec[i]);
     }
+    Ok(())
 }
 
 #[test]
-fn test_faer_to_ndarray_conversion() {
+fn test_faer_to_ndarray_conversion() -> TestResult<()> {
     // Create a faer matrix
     let mut faer_mat = Mat::zeros(2, 3);
     for i in 0..2 {
@@ -90,7 +95,7 @@ fn test_faer_to_ndarray_conversion() {
     }
 
     // Convert to ndarray
-    let arr = Array2::from_faer(&faer_mat).unwrap();
+    let arr = Array2::from_faer(&faer_mat)?;
 
     // Check dimensions
     assert_eq!(arr.nrows(), 2);
@@ -102,10 +107,11 @@ fn test_faer_to_ndarray_conversion() {
             assert_eq!(arr[[i, j]], faer_mat[(i, j)]);
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_faer_to_ndarray_vector_conversion() {
+fn test_faer_to_ndarray_vector_conversion() -> TestResult<()> {
     // Create a faer column vector
     let mut faer_mat = Mat::zeros(3, 1);
     for i in 0..3 {
@@ -113,7 +119,7 @@ fn test_faer_to_ndarray_vector_conversion() {
     }
 
     // Convert to ndarray vector
-    let arr = Array1::from_faer(&faer_mat).unwrap();
+    let arr = Array1::from_faer(&faer_mat)?;
 
     // Check dimensions
     assert_eq!(arr.len(), 3);
@@ -122,10 +128,11 @@ fn test_faer_to_ndarray_vector_conversion() {
     for i in 0..3 {
         assert_eq!(arr[i], faer_mat[(i, 0)]);
     }
+    Ok(())
 }
 
 #[test]
-fn test_faer_to_nalgebra_conversion() {
+fn test_faer_to_nalgebra_conversion() -> TestResult<()> {
     // Create a faer matrix
     let mut faer_mat = Mat::zeros(2, 3);
     for i in 0..2 {
@@ -135,7 +142,7 @@ fn test_faer_to_nalgebra_conversion() {
     }
 
     // Convert to nalgebra
-    let mat = DMatrix::from_faer(&faer_mat).unwrap();
+    let mat = DMatrix::from_faer(&faer_mat)?;
 
     // Check dimensions
     assert_eq!(mat.nrows(), 2);
@@ -147,10 +154,11 @@ fn test_faer_to_nalgebra_conversion() {
             assert_eq!(mat[(i, j)], faer_mat[(i, j)]);
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_faer_to_nalgebra_vector_conversion() {
+fn test_faer_to_nalgebra_vector_conversion() -> TestResult<()> {
     // Create a faer column vector
     let mut faer_mat = Mat::zeros(3, 1);
     for i in 0..3 {
@@ -158,7 +166,7 @@ fn test_faer_to_nalgebra_vector_conversion() {
     }
 
     // Convert to nalgebra vector
-    let vec = DVector::from_faer(&faer_mat).unwrap();
+    let vec = DVector::from_faer(&faer_mat)?;
 
     // Check dimensions
     assert_eq!(vec.nrows(), 3);
@@ -167,16 +175,17 @@ fn test_faer_to_nalgebra_vector_conversion() {
     for i in 0..3 {
         assert_eq!(vec[i], faer_mat[(i, 0)]);
     }
+    Ok(())
 }
 
 #[test]
-fn test_roundtrip_ndarray_conversion() {
+fn test_roundtrip_ndarray_conversion() -> TestResult<()> {
     // Create an ndarray matrix
-    let arr = Array2::from_shape_vec((2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+    let arr = Array2::from_shape_vec((2, 3), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])?;
 
     // Convert to faer and back
-    let faer_mat = (&arr).into_faer().unwrap();
-    let arr2 = Array2::from_faer(&faer_mat).unwrap();
+    let faer_mat = (&arr).into_faer()?;
+    let arr2 = Array2::from_faer(&faer_mat)?;
 
     // Check equality
     for i in 0..2 {
@@ -184,16 +193,17 @@ fn test_roundtrip_ndarray_conversion() {
             assert_eq!(arr[[i, j]], arr2[[i, j]]);
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_roundtrip_nalgebra_conversion() {
+fn test_roundtrip_nalgebra_conversion() -> TestResult<()> {
     // Create a nalgebra matrix
     let mat = DMatrix::from_row_slice(2, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
 
     // Convert to faer and back
-    let faer_mat = (&mat).into_faer().unwrap();
-    let mat2 = DMatrix::from_faer(&faer_mat).unwrap();
+    let faer_mat = (&mat).into_faer()?;
+    let mat2 = DMatrix::from_faer(&faer_mat)?;
 
     // Check equality
     for i in 0..2 {
@@ -201,4 +211,5 @@ fn test_roundtrip_nalgebra_conversion() {
             assert_eq!(mat[(i, j)], mat2[(i, j)]);
         }
     }
+    Ok(())
 }

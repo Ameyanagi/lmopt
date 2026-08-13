@@ -1,3 +1,4 @@
+use crate::TerminationReason;
 use thiserror::Error;
 
 /// Error type for lmopt operations
@@ -23,9 +24,14 @@ pub enum Error {
     #[error("Matrix error: {0}")]
     MatrixError(String),
 
-    /// No convergence achieved
-    #[error("No convergence: {0}")]
-    NoConvergence(String),
+    /// The solver stopped without satisfying a convergence criterion.
+    #[error("optimization did not converge after {iterations} iterations: {reason:?}")]
+    NoConvergence {
+        /// Why the solver stopped.
+        reason: TerminationReason,
+        /// Number of attempted iterations.
+        iterations: usize,
+    },
 }
 
 /// Result type for lmopt operations

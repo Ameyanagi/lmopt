@@ -1,6 +1,6 @@
 [package]
 name = "lmopt"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.85"
 authors = ["LMOpt Contributors"]
@@ -10,6 +10,7 @@ repository = "https://github.com/Ameyanagi/lmopt"
 readme = "README.md"
 keywords = ["optimization", "levenberg-marquardt", "numeric", "fitting", "least-squares"]
 categories = ["algorithms", "mathematics", "science"]
+exclude = ["tests/consumer"]
 [dependencies]
 # Linear algebra
 faer = { version = "0.22.6", default-features = false, features = ["std", "rayon", "linalg"] }
@@ -27,9 +28,9 @@ thiserror = "2.0.12"
 default = []
 ndarray = ["dep:ndarray"]
 nalgebra = ["dep:nalgebra"]
-minpack-compat = []
 
 [dev-dependencies]
+anyhow = "1.0.100"
 approx = "0.5.1"
 criterion = { version = "0.7.0", default-features = false, features = ["cargo_bench_support"] }
 proptest = { version = "1.11.0", default-features = false, features = ["std"] }

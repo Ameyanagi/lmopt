@@ -1,4 +1,5 @@
-use lmopt::{JacobianMethod, LeastSquaresProblem, LevenbergMarquardt, Result};
+use anyhow::{Context, Result};
+use lmopt::{JacobianMethod, LeastSquaresProblem, LevenbergMarquardt, Result as LmoptResult};
 
 // A simple problem fitting a line: y = a*x + b
 // This demonstrates the basic usage of the lmopt library
@@ -11,7 +12,7 @@ struct LinearModel {
 }
 
 impl LeastSquaresProblem<f64> for LinearModel {
-    fn residuals(&self, parameters: &faer::Mat<f64>) -> Result<faer::Mat<f64>> {
+    fn residuals(&self, parameters: &faer::Mat<f64>) -> LmoptResult<faer::Mat<f64>> {
         let a = parameters[(0, 0)];
         let b = parameters[(1, 0)];
 
@@ -58,16 +59,15 @@ fn main() -> Result<()> {
     // Create optimizer with fluent API
     let optimizer = LevenbergMarquardt::new()
         .with_max_iterations(100)
-        .with_epsilon_1(1e-8)
-        .with_epsilon_2(1e-8)
+        .with_ftol(1e-8)
+        .with_xtol(1e-8)
         .with_jacobian_method(JacobianMethod::UserProvided);
 
     // Solve the optimization problem
-    let result = optimizer.minimize(&problem, &initial_guess)?;
+    let result = optimizer.minimize(&problem, &initial_guess).context("failed to fit the line")?;
 
     // Print the results
     println!("Optimization complete after {} iterations", result.iterations);
-    println!("Success: {}", result.success);
     println!("Termination reason: {:?}", result.termination_reason);
     println!("Residual/Jacobian evaluations: {}/{}", result.residual_evaluations, result.jacobian_evaluations);
 

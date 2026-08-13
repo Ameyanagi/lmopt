@@ -20,12 +20,19 @@ jobs:
         run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
       - name: Check formatting
         run: cargo +stable fmt --all -- --check
+      - name: Reject unchecked extraction and unsafe code
+        run: |
+          if rg '\.(unwrap|expect)\(|\bunsafe\b' src examples benches tests --glob '*.rs'; then
+            exit 1
+          fi
       - name: Run Clippy
         run: cargo +stable clippy --all-targets --all-features -- -D warnings
       - name: Run tests
         run: cargo +stable test --all-targets --all-features
       - name: Run documentation tests
         run: cargo +stable test --doc --all-features
+      - name: Compile the README quick start as an external consumer
+        run: cargo +stable check --manifest-path tests/consumer/Cargo.toml
       - name: Build documentation
         env:
           RUSTDOCFLAGS: -D warnings

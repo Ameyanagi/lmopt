@@ -1,4 +1,5 @@
-use lmopt::{JacobianMethod, LeastSquaresProblem, LevenbergMarquardt, Result};
+use anyhow::{Context, Result};
+use lmopt::{JacobianMethod, LeastSquaresProblem, LevenbergMarquardt, Result as LmoptResult};
 
 // Fitting a Gaussian curve: y = a * exp(-(x - b)² / (2 * c²)) + d
 // Parameters: a (amplitude), b (center), c (width), d (offset)
@@ -9,7 +10,7 @@ struct GaussianModel {
 }
 
 impl LeastSquaresProblem<f64> for GaussianModel {
-    fn residuals(&self, parameters: &faer::Mat<f64>) -> Result<faer::Mat<f64>> {
+    fn residuals(&self, parameters: &faer::Mat<f64>) -> LmoptResult<faer::Mat<f64>> {
         let a = parameters[(0, 0)]; // amplitude
         let b = parameters[(1, 0)]; // center
         let c = parameters[(2, 0)]; // width
@@ -104,18 +105,17 @@ fn main() -> Result<()> {
     // Create optimizer
     let optimizer = LevenbergMarquardt::new()
         .with_max_iterations(100)
-        .with_epsilon_1(1e-8)
-        .with_epsilon_2(1e-8)
+        .with_ftol(1e-8)
+        .with_xtol(1e-8)
         .with_jacobian_method(JacobianMethod::UserProvided);
 
     // Solve the optimization problem
-    let result = optimizer.minimize(&problem, &initial_guess)?;
+    let result = optimizer.minimize(&problem, &initial_guess).context("failed to fit the Gaussian curve")?;
 
     // Print the results
     println!("Gaussian Fitting Results");
     println!("========================");
     println!("Optimization complete after {} iterations", result.iterations);
-    println!("Success: {}", result.success);
     println!("Termination reason: {:?}", result.termination_reason);
     println!("Accepted/rejected steps: {}/{}", result.accepted_steps, result.rejected_steps);
     println!("Residual/Jacobian evaluations: {}/{}", result.residual_evaluations, result.jacobian_evaluations);

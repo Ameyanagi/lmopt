@@ -1,3 +1,4 @@
+use anyhow::Result as TestResult;
 use faer::Mat;
 use lmopt::utils::jacobian::get_jacobian_calculator;
 use lmopt::{JacobianMethod, LeastSquaresProblem, Result};
@@ -38,12 +39,12 @@ impl LeastSquaresProblem<f64> for LinearProblem {
 }
 
 #[test]
-fn test_user_provided_jacobian() {
+fn test_user_provided_jacobian() -> TestResult<()> {
     let problem = LinearProblem;
     let params = Mat::from_fn(2, 1, |_, _| 1.0);
 
     let calculator = get_jacobian_calculator::<f64>(JacobianMethod::UserProvided, 0.0);
-    let jacobian = calculator.calculate_jacobian(&problem, &params).unwrap();
+    let jacobian = calculator.calculate_jacobian(&problem, &params)?;
 
     // Verify the Jacobian
     assert_eq!(jacobian.nrows(), 3);
@@ -59,16 +60,17 @@ fn test_user_provided_jacobian() {
 
     // Verify method used
     assert_eq!(calculator.method_used(), JacobianMethod::UserProvided);
+    Ok(())
 }
 
 #[test]
-fn test_numerical_central_jacobian() {
+fn test_numerical_central_jacobian() -> TestResult<()> {
     let problem = LinearProblem;
     let params = Mat::from_fn(2, 1, |_, _| 1.0);
 
     // Using central difference method
     let calculator = get_jacobian_calculator::<f64>(JacobianMethod::NumericalCentral, 1e-6);
-    let jacobian = calculator.calculate_jacobian(&problem, &params).unwrap();
+    let jacobian = calculator.calculate_jacobian(&problem, &params)?;
 
     // Verify the Jacobian
     assert_eq!(jacobian.nrows(), 3);
@@ -84,16 +86,17 @@ fn test_numerical_central_jacobian() {
 
     // Verify method used
     assert_eq!(calculator.method_used(), JacobianMethod::NumericalCentral);
+    Ok(())
 }
 
 #[test]
-fn test_numerical_forward_jacobian() {
+fn test_numerical_forward_jacobian() -> TestResult<()> {
     let problem = LinearProblem;
     let params = Mat::from_fn(2, 1, |_, _| 1.0);
 
     // Using forward difference method
     let calculator = get_jacobian_calculator::<f64>(JacobianMethod::NumericalForward, 1e-6);
-    let jacobian = calculator.calculate_jacobian(&problem, &params).unwrap();
+    let jacobian = calculator.calculate_jacobian(&problem, &params)?;
 
     // Verify the Jacobian
     assert_eq!(jacobian.nrows(), 3);
@@ -109,16 +112,18 @@ fn test_numerical_forward_jacobian() {
 
     // Verify method used
     assert_eq!(calculator.method_used(), JacobianMethod::NumericalForward);
+    Ok(())
 }
 
 #[test]
-fn test_auto_prefers_the_analytical_jacobian() {
+fn test_auto_prefers_the_analytical_jacobian() -> TestResult<()> {
     let problem = LinearProblem;
     let params = Mat::from_fn(2, 1, |_, _| 1.0);
     let calculator = get_jacobian_calculator::<f64>(JacobianMethod::Auto, 1e-6);
 
-    let jacobian = calculator.calculate_jacobian(&problem, &params).unwrap();
+    let jacobian = calculator.calculate_jacobian(&problem, &params)?;
 
     assert_eq!(jacobian[(2, 0)], 3.0);
     assert_eq!(calculator.method_used(), JacobianMethod::UserProvided);
+    Ok(())
 }

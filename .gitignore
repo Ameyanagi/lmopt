@@ -1,5 +1,7 @@
 /target/
 /Cargo.lock
+/tests/consumer/Cargo.lock
+/tests/consumer/target/
 
 # Reference implementations - not part of our project
 levenberg-marquardt/

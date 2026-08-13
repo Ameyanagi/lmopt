@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result as TestResult};
 use faer::Mat;
 use lmopt::{LeastSquaresProblem, Result};
 
@@ -36,12 +37,12 @@ impl LeastSquaresProblem<f64> for RosenbrockProblem {
 }
 
 #[test]
-fn test_rosenbrock_residuals() {
+fn test_rosenbrock_residuals() -> TestResult<()> {
     let problem = RosenbrockProblem;
 
     // Case 1: At the minimum (1, 1)
     let params = Mat::from_fn(2, 1, |_, _| 1.0);
-    let residuals = problem.residuals(&params).unwrap();
+    let residuals = problem.residuals(&params)?;
 
     // Residuals should be nearly zero at the minimum
     assert_eq!(residuals.nrows(), 2);
@@ -51,7 +52,7 @@ fn test_rosenbrock_residuals() {
 
     // Case 2: At point (0, 0)
     let params = Mat::zeros(2, 1);
-    let residuals = problem.residuals(&params).unwrap();
+    let residuals = problem.residuals(&params)?;
 
     // Expected residuals: [1, 0]
     assert_eq!(residuals.nrows(), 2);
@@ -63,22 +64,23 @@ fn test_rosenbrock_residuals() {
     let mut params = Mat::zeros(2, 1);
     params[(0, 0)] = 2.0;
     params[(1, 0)] = 3.0;
-    let residuals = problem.residuals(&params).unwrap();
+    let residuals = problem.residuals(&params)?;
 
     // Expected residuals: [-1, 10(3-4)] = [-1, -10]
     assert_eq!(residuals.nrows(), 2);
     assert_eq!(residuals.ncols(), 1);
     assert!((residuals[(0, 0)] + 1.0).abs() < 1e-10);
     assert!((residuals[(1, 0)] + 10.0).abs() < 1e-10);
+    Ok(())
 }
 
 #[test]
-fn test_rosenbrock_jacobian() {
+fn test_rosenbrock_jacobian() -> TestResult<()> {
     let problem = RosenbrockProblem;
 
     // Case 1: At point (1, 1)
     let params = Mat::from_fn(2, 1, |_, _| 1.0);
-    let jacobian = problem.jacobian(&params).unwrap();
+    let jacobian = problem.jacobian(&params).ok_or_else(|| anyhow!("analytical Jacobian is missing"))?;
 
     // Expected Jacobian at (1, 1):
     // [-1, 0]
@@ -92,7 +94,7 @@ fn test_rosenbrock_jacobian() {
 
     // Case 2: At point (0, 0)
     let params = Mat::zeros(2, 1);
-    let jacobian = problem.jacobian(&params).unwrap();
+    let jacobian = problem.jacobian(&params).ok_or_else(|| anyhow!("analytical Jacobian is missing"))?;
 
     // Expected Jacobian at (0, 0):
     // [-1, 0]
@@ -108,7 +110,7 @@ fn test_rosenbrock_jacobian() {
     let mut params = Mat::zeros(2, 1);
     params[(0, 0)] = 2.0;
     params[(1, 0)] = 3.0;
-    let jacobian = problem.jacobian(&params).unwrap();
+    let jacobian = problem.jacobian(&params).ok_or_else(|| anyhow!("analytical Jacobian is missing"))?;
 
     // Expected Jacobian at (2, 3):
     // [-1, 0]
@@ -119,4 +121,5 @@ fn test_rosenbrock_jacobian() {
     assert_eq!(jacobian[(0, 1)], 0.0);
     assert_eq!(jacobian[(1, 0)], -40.0);
     assert_eq!(jacobian[(1, 1)], 10.0);
+    Ok(())
 }

@@ -1,13 +1,16 @@
+#![forbid(unsafe_code)]
+#![deny(clippy::expect_used, clippy::unwrap_used)]
+
 //! # lmopt: A Levenberg-Marquardt optimization library using faer
 //!
-//! `lmopt` is a high-performance implementation of the Levenberg-Marquardt algorithm
-//! for nonlinear least squares optimization, leveraging the [faer](https://github.com/sarah-ek/faer-rs)
-//! linear algebra library for efficient matrix operations.
+//! `lmopt` implements the Levenberg-Marquardt algorithm for dense nonlinear
+//! least-squares optimization, leveraging [faer](https://github.com/sarah-ek/faer-rs)
+//! for linear algebra.
 //!
 //! ## Features
 //!
 //! - **Powerful Optimizer**: Robust Levenberg-Marquardt implementation with trust region strategy
-//! - **High Performance**: Built on the `faer` library for fast matrix operations
+//! - **Measured Performance**: Criterion baselines for Jacobians and complete solves
 //! - **Robust Linear Solves**: Augmented column-pivoted QR with truncated-SVD fallback
 //! - **Multiple Jacobian Methods**:
 //!   - Automatic selection between analytical and numerical differentiation
@@ -18,49 +21,17 @@
 //!
 //! ## Basic Usage
 //!
-//! ```rust,no_run
-//! use lmopt::{LeastSquaresProblem, LevenbergMarquardt, JacobianMethod, Result};
+//! ```rust
+//! let xs = [0.0, 1.0, 2.0, 3.0];
+//! let ys = [1.0, 3.0, 5.0, 7.0];
+//! let fit = lmopt::least_squares(&[0.0, 0.0], |parameters| {
+//!     let [slope, intercept] = parameters else { return Vec::new() };
+//!     xs.iter().zip(ys).map(|(x, y)| slope * x + intercept - y).collect()
+//! })?;
 //!
-//! // Define your problem by implementing the LeastSquaresProblem trait
-//! struct MyProblem {
-//!     // Your problem data here
-//! }
-//!
-//! impl LeastSquaresProblem<f64> for MyProblem {
-//!     // Compute the vector of residuals
-//!     fn residuals(&self, parameters: &faer::Mat<f64>) -> Result<faer::Mat<f64>> {
-//!         // Your residual calculation here
-//!         todo!()
-//!     }
-//!
-//!     // Optionally provide an analytical Jacobian
-//!     fn jacobian(&self, parameters: &faer::Mat<f64>) -> Option<faer::Mat<f64>> {
-//!         // Return None to let the default Auto strategy use central differences
-//!         None
-//!     }
-//! }
-//!
-//! // Solve the optimization problem
-//! fn main() -> Result<()> {
-//!     let problem = MyProblem { /* ... */ };
-//!     let initial_guess = faer::Mat::from_fn(2, 1, |i, _| if i == 0 { 1.0 } else { 2.0 }); // Starting parameters
-//!
-//!     // Configure the optimizer
-//!     let optimizer = LevenbergMarquardt::new()
-//!         .with_max_iterations(100)
-//!         .with_epsilon_1(1e-8)
-//!         .with_epsilon_2(1e-8)
-//!         .with_jacobian_method(JacobianMethod::NumericalCentral);
-//!
-//!     // Run the optimization
-//!     let result = optimizer.minimize(&problem, &initial_guess)?;
-//!
-//!     println!("Optimization succeeded: {}", result.success);
-//!     println!("Solution parameters: {:?}", result.solution_params);
-//!     println!("Final objective value: {}", result.objective_function);
-//!
-//!     Ok(())
-//! }
+//! assert!((fit.parameters()[0] - 2.0).abs() < 1e-6);
+//! assert!((fit.parameters()[1] - 1.0).abs() < 1e-6);
+//! # Ok::<(), lmopt::Error>(())
 //! ```
 //!
 //! ## Jacobian Calculation
@@ -92,6 +63,7 @@
 //! - Final residuals and objective function value
 //! - The method used for Jacobian calculation
 
+mod easy;
 mod error;
 mod lm;
 mod problem;
@@ -101,6 +73,7 @@ pub mod utils;
 pub use faer_traits::RealField;
 
 // Re-export core functionality
+pub use easy::{least_squares, try_least_squares};
 pub use error::{Error, Result};
 pub use lm::{JacobianMethod, LevenbergMarquardt, MinimizationReport, TerminationReason};
 pub use problem::LeastSquaresProblem;

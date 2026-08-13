@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result as TestResult};
 use approx::assert_relative_eq;
 use faer::Mat;
 use lmopt::utils::jacobian::get_jacobian_calculator;
@@ -54,7 +55,7 @@ impl LeastSquaresProblem<f64> for NonlinearProblem {
 }
 
 #[test]
-fn test_compare_numerical_with_analytical() {
+fn test_compare_numerical_with_analytical() -> TestResult<()> {
     let problem = NonlinearProblem;
 
     // Test with multiple parameter values to ensure robust comparison
@@ -71,16 +72,16 @@ fn test_compare_numerical_with_analytical() {
         let params = Mat::from_fn(2, 1, |j, _| if j == 0 { *x } else { *y });
 
         // Get the analytical Jacobian (our reference)
-        let analytical = problem.jacobian(&params).unwrap();
+        let analytical = problem.jacobian(&params).ok_or_else(|| anyhow!("analytical Jacobian is missing"))?;
 
         // Calculate Jacobian using different numerical methods
         let forward_calculator = get_jacobian_calculator::<f64>(JacobianMethod::NumericalForward, 1e-6);
         let central_calculator = get_jacobian_calculator::<f64>(JacobianMethod::NumericalCentral, 1e-6);
         let backward_calculator = get_jacobian_calculator::<f64>(JacobianMethod::NumericalBackward, 1e-6);
 
-        let forward_jacobian = forward_calculator.calculate_jacobian(&problem, &params).unwrap();
-        let central_jacobian = central_calculator.calculate_jacobian(&problem, &params).unwrap();
-        let backward_jacobian = backward_calculator.calculate_jacobian(&problem, &params).unwrap();
+        let forward_jacobian = forward_calculator.calculate_jacobian(&problem, &params)?;
+        let central_jacobian = central_calculator.calculate_jacobian(&problem, &params)?;
+        let backward_jacobian = backward_calculator.calculate_jacobian(&problem, &params)?;
 
         // Now compare the Jacobians with analytical reference
         for row in 0..4 {
@@ -119,24 +120,25 @@ fn test_compare_numerical_with_analytical() {
             }
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_numerical_methods_comparison() {
+fn test_numerical_methods_comparison() -> TestResult<()> {
     let problem = NonlinearProblem;
     let params = Mat::from_fn(2, 1, |i, _| if i == 0 { 1.0 } else { 2.0 });
 
     // Get the analytical Jacobian (reference)
-    let analytical = problem.jacobian(&params).unwrap();
+    let analytical = problem.jacobian(&params).ok_or_else(|| anyhow!("analytical Jacobian is missing"))?;
 
     // Calculate Jacobian using different numerical methods
     let forward_calculator = get_jacobian_calculator::<f64>(JacobianMethod::NumericalForward, 1e-6);
     let central_calculator = get_jacobian_calculator::<f64>(JacobianMethod::NumericalCentral, 1e-6);
     let backward_calculator = get_jacobian_calculator::<f64>(JacobianMethod::NumericalBackward, 1e-6);
 
-    let forward_jacobian = forward_calculator.calculate_jacobian(&problem, &params).unwrap();
-    let central_jacobian = central_calculator.calculate_jacobian(&problem, &params).unwrap();
-    let backward_jacobian = backward_calculator.calculate_jacobian(&problem, &params).unwrap();
+    let forward_jacobian = forward_calculator.calculate_jacobian(&problem, &params)?;
+    let central_jacobian = central_calculator.calculate_jacobian(&problem, &params)?;
+    let backward_jacobian = backward_calculator.calculate_jacobian(&problem, &params)?;
 
     // Compare accuracy of different numerical methods
     for row in 0..4 {
@@ -166,22 +168,23 @@ fn test_numerical_methods_comparison() {
             assert_relative_eq!(central_jacobian[(row, col)], analytical[(row, col)], max_relative = 1e-6, epsilon = 1e-6);
         }
     }
+    Ok(())
 }
 
 #[test]
-fn test_step_size_impact() {
+fn test_step_size_impact() -> TestResult<()> {
     let problem = NonlinearProblem;
     let params = Mat::from_fn(2, 1, |i, _| if i == 0 { 1.0 } else { 2.0 });
 
     // Get the analytical Jacobian (reference)
-    let analytical = problem.jacobian(&params).unwrap();
+    let analytical = problem.jacobian(&params).ok_or_else(|| anyhow!("analytical Jacobian is missing"))?;
 
     // Test different step sizes
     let step_sizes = [1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10];
 
     for step_size in step_sizes.iter() {
         let calculator = get_jacobian_calculator::<f64>(JacobianMethod::NumericalCentral, *step_size);
-        let jacobian = calculator.calculate_jacobian(&problem, &params).unwrap();
+        let jacobian = calculator.calculate_jacobian(&problem, &params)?;
 
         // Calculate maximum error across all elements
         let mut max_error: f64 = 0.0;
@@ -201,4 +204,5 @@ fn test_step_size_impact() {
             assert!(max_error < 1e-5, "Error too large with step size {}", step_size);
         }
     }
+    Ok(())
 }

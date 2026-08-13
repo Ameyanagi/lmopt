@@ -22,3 +22,19 @@ cargo bench --bench performance -- \
 For decisions involving small differences, run the default Criterion duration
 on an otherwise idle machine and compare Criterion result directories from the
 same host. Do not compare raw timings across different machines.
+
+## 0.3 solver smoke check
+
+On 2026-08-14, a sequential old/new check on the same Apple M4 host with Rust
+1.95 measured the 64-residual analytical solve at 121.46 µs before the 0.3
+changes and 69.16 µs after them (median estimates). The short 20-sample check
+also measured:
+
+| Benchmark | Median |
+| --- | ---: |
+| End-to-end analytical optimization, 1,024 residuals | 766.97 µs |
+| Retry-heavy Rosenbrock solve | 77.90 µs |
+
+The 64-residual improvement comes from eliminating duplicate residual- and
+Jacobian-norm passes and reusing the augmented solve workspace. Treat these as
+smoke results, not portable absolute performance claims.

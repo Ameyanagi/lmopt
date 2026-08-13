@@ -1,4 +1,5 @@
-use lmopt::{JacobianMethod, LeastSquaresProblem, LevenbergMarquardt, Result};
+use anyhow::{Context, Result};
+use lmopt::{JacobianMethod, LeastSquaresProblem, LevenbergMarquardt, Result as LmoptResult};
 
 // Rosenbrock function: f(x,y) = (1-x)² + 100(y-x²)²
 // Minimum at (1, 1)
@@ -6,7 +7,7 @@ use lmopt::{JacobianMethod, LeastSquaresProblem, LevenbergMarquardt, Result};
 struct RosenbrockProblem;
 
 impl LeastSquaresProblem<f64> for RosenbrockProblem {
-    fn residuals(&self, parameters: &faer::Mat<f64>) -> Result<faer::Mat<f64>> {
+    fn residuals(&self, parameters: &faer::Mat<f64>) -> LmoptResult<faer::Mat<f64>> {
         let x = parameters[(0, 0)];
         let y = parameters[(1, 0)];
 
@@ -54,14 +55,10 @@ fn main() -> Result<()> {
         JacobianMethod::NumericalBackward,
     ] {
         // Create optimizer with specific Jacobian method
-        let optimizer = LevenbergMarquardt::new()
-            .with_max_iterations(100)
-            .with_epsilon_1(1e-10)
-            .with_epsilon_2(1e-10)
-            .with_jacobian_method(method);
+        let optimizer = LevenbergMarquardt::new().with_max_iterations(100).with_ftol(1e-10).with_xtol(1e-10).with_jacobian_method(method);
 
         // Solve the optimization problem
-        let result = optimizer.minimize(&problem, &initial_guess)?;
+        let result = optimizer.minimize(&problem, &initial_guess).with_context(|| format!("optimization failed with {method:?}"))?;
 
         // Extract the optimized parameters
         let x = result.solution_params[(0, 0)];
@@ -76,7 +73,6 @@ fn main() -> Result<()> {
         println!("  Execution time: {:?}", result.execution_time);
         println!("  Residual evaluations: {}", result.residual_evaluations);
         println!("  Jacobian evaluations: {}", result.jacobian_evaluations);
-        println!("  Success: {}", result.success);
         println!("  Termination reason: {:?}", result.termination_reason);
         println!();
     }
