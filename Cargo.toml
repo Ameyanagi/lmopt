@@ -7,10 +7,19 @@ authors = ["LMOpt Contributors"]
 description = "Levenberg-Marquardt optimization with the faer linear algebra library"
 license = "MIT"
 repository = "https://github.com/Ameyanagi/lmopt"
+documentation = "https://docs.rs/lmopt"
 readme = "README.md"
 keywords = ["optimization", "levenberg-marquardt", "numeric", "fitting", "least-squares"]
 categories = ["algorithms", "mathematics", "science"]
-exclude = ["tests/consumer"]
+exclude = [
+    "/.github",
+    "/.gitignore",
+    "/.rustfmt.toml",
+    "/CLAUDE.md",
+    "/FAER.md",
+    "/rust-toolchain.toml",
+    "/tests/consumer",
+]
 [dependencies]
 # Linear algebra
 faer = { version = "0.22.6", default-features = false, features = ["std", "rayon", "linalg"] }
